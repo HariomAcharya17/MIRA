@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { TrafficLights } from "@/components/TrafficLights";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,10 @@ const Login = () => {
   const [busy, setBusy] = useState(false);
   const { login, signup } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // If user was redirected here from a protected route, send them back after login
+  const from = (location.state as any)?.from?.pathname || "/account";
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,13 +32,14 @@ const Login = () => {
       if (mode === "login") await login(cleanEmail, password);
       else await signup(cleanName, cleanEmail, password);
       toast.success(mode === "login" ? "Identity verified." : "Credentials established.");
-      navigate("/account");
+      navigate(from, { replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Authentication sequence failed");
     } finally {
       setBusy(false);
     }
   };
+
 
   return (
     <Layout hideFooter>

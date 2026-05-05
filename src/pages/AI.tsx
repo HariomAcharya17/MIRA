@@ -5,7 +5,7 @@ import { TrafficLights } from "@/components/TrafficLights";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Send, Download, Plus, Sparkles, User as UserIcon, Brain, Activity, ShieldCheck, Hash, BarChart3, Lock, Info } from "lucide-react";
-import { NVIDIA_MODELS, callMiraStream } from "@/lib/mira-api";
+import { NVIDIA_MODELS } from "@/lib/mira-api";
 import { ChatMessage, ChatSession, getUsage, recordUsage, upsertSession, downloadAsFile } from "@/lib/store";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -134,38 +134,82 @@ const AI = () => {
     setInput("");
     setBusy(true);
 
-    // create a new abort controller for this stream
     const abort = new AbortController();
     abortRef.current = abort;
 
     try {
       let fullContent = "";
-      let lastTrackedLength = 0;
-      const stream = callMiraStream(model, updated.messages.slice(0, -1));
 
-      for await (const chunk of stream) {
-        // stop processing if aborted (navigation away)
+      // 🔥 BACKEND CALL — /api/mira (Vercel Edge Function in prod, Vite proxy → Express in dev)
+      const response = await fetch("/api/mira", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: abort.signal,
+        body: JSON.stringify({
+          model: model.id,
+          messages: updated.messages
+            .slice(0, -1)
+            .map(({ role, content }) => ({ role, content })),
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`API error ${response.status}: ${errText}`);
+      }
+
+      if (!response.body) throw new Error("No response stream");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
         if (abort.signal.aborted) break;
 
-        fullContent += chunk;
-        setSession((prev) => ({
-          ...prev,
-          messages: prev.messages.map((m) =>
-            m.id === assistantId ? { ...m, content: fullContent } : m
-          ),
-        }));
+        // Accumulate chunks in a buffer (chunks may split across SSE lines)
+        buffer += decoder.decode(value, { stream: true });
 
-        const currentLength = fullContent.length;
-        if (currentLength > lastTrackedLength) {
-          const delta = Math.ceil((currentLength - lastTrackedLength) / 3.8);
-          if (delta > 0) {
-            recordUsage(model.id, 0, delta);
-            setUsage(getUsage());
-            lastTrackedLength = currentLength;
+        // Process all complete lines in the buffer
+        const lines = buffer.split("\n");
+        // Keep the last (possibly incomplete) line in the buffer
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+
+          const jsonStr = trimmed.slice(5).trim(); // strip "data: "
+          if (jsonStr === "[DONE]") break;
+          if (!jsonStr) continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const delta = parsed?.choices?.[0]?.delta?.content;
+            if (typeof delta === "string" && delta.length > 0) {
+              fullContent += delta;
+
+              // Live-update the assistant message bubble
+              setSession((prev) => ({
+                ...prev,
+                messages: prev.messages.map((m) =>
+                  m.id === assistantId ? { ...m, content: fullContent } : m
+                ),
+              }));
+
+              // Track token usage in real-time
+              recordUsage(model.id, 0, Math.ceil(delta.length / 3.8));
+              setUsage(getUsage());
+            }
+          } catch {
+            // Ignore malformed JSON lines (NVIDIA sometimes sends empty keep-alives)
           }
         }
       }
 
+      // Persist session after stream completes
       if (!abort.signal.aborted) {
         const finalSession: ChatSession = {
           ...updated,
@@ -175,17 +219,20 @@ const AI = () => {
           updatedAt: Date.now(),
         };
         upsertSession(finalSession);
-        recordUsage(model.id, Math.ceil(userPrompt.length / 4), Math.ceil(fullContent.length / 4));
+        recordUsage(
+          model.id,
+          Math.ceil(userPrompt.length / 4),
+          Math.ceil(fullContent.length / 4)
+        );
         setUsage(getUsage());
       }
-    } catch (e) {
-      if (!abort.signal.aborted) {
-        toast.error(e instanceof Error ? e.message : "Handshake failed");
-        setSession((prev) => ({
-          ...prev,
-          messages: prev.messages.filter((m) => m.id !== assistantId),
-        }));
-      }
+    } catch (e: any) {
+      if (e?.name === "AbortError" || abort.signal.aborted) return;
+      toast.error(e instanceof Error ? e.message : "Handshake failed");
+      setSession((prev) => ({
+        ...prev,
+        messages: prev.messages.filter((m) => m.id !== assistantId),
+      }));
     } finally {
       if (!abort.signal.aborted) setBusy(false);
     }

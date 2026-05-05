@@ -9,10 +9,11 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
     proxy: {
-      "/nvidia-api": {
-        target: "https://integrate.api.nvidia.com",
+      // In dev, proxy /api/* to the local Express server (server.js on port 3001)
+      // Note: port 5000 is reserved by macOS AirPlay Receiver
+      "/api": {
+        target: "http://localhost:3001",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/nvidia-api/, ""),
       },
     },
     hmr: {
