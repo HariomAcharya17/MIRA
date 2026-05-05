@@ -7,13 +7,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { label: "Home", to: "/", section: "home" },
-  { label: "About", to: "/#about", section: "about" },
+  { label: "Home", to: "/#home", section: "home" },
   { label: "Features", to: "/#features", section: "features" },
-  { label: "FAQ", to: "/#faq", section: "faq" },
-  { label: "Blog", to: "/#blog", section: "blog" },
   { label: "Contact", to: "/#contact", section: "contact" },
 ];
+
 
 export const Header = () => {
   const { theme, toggleTheme } = useTheme();
@@ -24,13 +22,23 @@ export const Header = () => {
 
   const handleAnchor = (e: React.MouseEvent, to: string) => {
     if (!to.includes("#")) return;
-    e.preventDefault();
+    
+    const [path, hash] = to.split("#");
     setOpen(false);
-    if (location.pathname !== "/") {
-      navigate(to);
-    } else {
-      const id = to.split("#")[1];
-      document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+
+    if (location.pathname !== path && path !== "") {
+      // If we are not on the target page, let the default navigation happen
+      // or manually navigate if we want to force it.
+      // But we want to prevent default if we're doing smooth scroll on the same page.
+      return; 
+    }
+
+    e.preventDefault();
+    const element = document.getElementById(hash);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    } else if (path === "/" || path === "") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
@@ -42,7 +50,7 @@ export const Header = () => {
   };
 
   return (
-    <header className="fixed top-0 inset-x-0 z-50 border-b border-border/40 bg-background/70 backdrop-blur-xl">
+    <header className="fixed top-0 inset-x-0 z-50 border-b border-border/40 bg-background/70 backdrop-blur-xl lightning-border-bottom">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <div className="flex items-center gap-8">
           <Link to="/" onClick={handleLogoClick} className="flex items-center gap-2 group">

@@ -1,5 +1,4 @@
-// Local stores for chat history, downloads, and usage.
-// Replace with backend calls when wiring NVIDIA / Lovable Cloud later.
+import { supabase } from "@/lib/supabase";
 
 export type ChatMessage = {
   id: string;
@@ -35,15 +34,36 @@ export type UsageStats = {
   history: { date: string; tokens: number }[];
 };
 
+// ── USER-SCOPED KEY HELPERS ──────────────────────────────────────────────────
+const getUserId = (): string | null => {
+  // Read synchronously from the cached session — no async needed
+  const raw = Object.keys(localStorage).find((k) => k.startsWith("sb-") && k.endsWith("-auth-token"));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(raw) || "");
+    return parsed?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const key = (base: string): string => {
+  const uid = getUserId();
+  return uid ? `${base}:${uid}` : base;
+};
+
 const KEY_SESSIONS = "mira-sessions";
 const KEY_DOWNLOADS = "mira-downloads";
 const KEY_USAGE = "mira-usage";
 
+// ── SESSIONS ─────────────────────────────────────────────────────────────────
 export const getSessions = (): ChatSession[] => {
-  const raw = localStorage.getItem(KEY_SESSIONS);
+  const raw = localStorage.getItem(key(KEY_SESSIONS));
   return raw ? JSON.parse(raw) : [];
 };
-export const saveSessions = (s: ChatSession[]) => localStorage.setItem(KEY_SESSIONS, JSON.stringify(s));
+
+export const saveSessions = (s: ChatSession[]) =>
+  localStorage.setItem(key(KEY_SESSIONS), JSON.stringify(s));
 
 export const upsertSession = (session: ChatSession) => {
   const all = getSessions();
@@ -52,24 +72,30 @@ export const upsertSession = (session: ChatSession) => {
   else all.unshift(session);
   saveSessions(all);
 };
-export const deleteSession = (id: string) => saveSessions(getSessions().filter((s) => s.id !== id));
 
+export const deleteSession = (id: string) =>
+  saveSessions(getSessions().filter((s) => s.id !== id));
+
+// ── DOWNLOADS ────────────────────────────────────────────────────────────────
 export const getDownloads = (): DownloadItem[] => {
-  const raw = localStorage.getItem(KEY_DOWNLOADS);
+  const raw = localStorage.getItem(key(KEY_DOWNLOADS));
   return raw ? JSON.parse(raw) : [];
 };
+
 export const addDownload = (item: DownloadItem) => {
   const all = getDownloads();
   all.unshift(item);
-  localStorage.setItem(KEY_DOWNLOADS, JSON.stringify(all));
-};
-export const deleteDownload = (id: string) => {
-  const all = getDownloads().filter((d) => d.id !== id);
-  localStorage.setItem(KEY_DOWNLOADS, JSON.stringify(all));
+  localStorage.setItem(key(KEY_DOWNLOADS), JSON.stringify(all));
 };
 
+export const deleteDownload = (id: string) => {
+  const all = getDownloads().filter((d) => d.id !== id);
+  localStorage.setItem(key(KEY_DOWNLOADS), JSON.stringify(all));
+};
+
+// ── USAGE ────────────────────────────────────────────────────────────────────
 export const getUsage = (): UsageStats => {
-  const raw = localStorage.getItem(KEY_USAGE);
+  const raw = localStorage.getItem(key(KEY_USAGE));
   if (raw) return JSON.parse(raw);
   return { totalTokens: 0, promptTokens: 0, completionTokens: 0, requests: 0, byModel: {}, history: [] };
 };
@@ -89,9 +115,10 @@ export const recordUsage = (model: string, promptTokens: number, completionToken
   if (last && last.date === today) last.tokens += total;
   else usage.history.push({ date: today, tokens: total });
   if (usage.history.length > 14) usage.history = usage.history.slice(-14);
-  localStorage.setItem(KEY_USAGE, JSON.stringify(usage));
+  localStorage.setItem(key(KEY_USAGE), JSON.stringify(usage));
 };
 
+// ── FILE DOWNLOAD ─────────────────────────────────────────────────────────────
 export const downloadAsFile = (filename: string, content: string, mime = "text/plain") => {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);

@@ -1,51 +1,80 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { supabase } from "@/lib/supabase";
 
 type User = { id: string; name: string; email: string };
 type AuthContextType = {
   user: User | null;
+  loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    if (typeof window === "undefined") return null;
-    const raw = localStorage.getItem("mira-user");
-    return raw ? JSON.parse(raw) : null;
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) localStorage.setItem("mira-user", JSON.stringify(user));
-    else localStorage.removeItem("mira-user");
-  }, [user]);
+    // 1. Check for an existing session on load
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || "Operator",
+          email: session.user.email || "",
+        });
+      }
+      setLoading(false);
+    });
+
+    // 2. Listen for auth state changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || "Operator",
+          email: session.user.email || "",
+        });
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const login = async (email: string, password: string) => {
-    if (!email || !password) throw new Error("Email and password required");
-    // Local-only auth (no backend yet). Recognizes any previously signed-up email.
-    const accountsRaw = localStorage.getItem("mira-accounts");
-    const accounts: Record<string, { name: string; password: string }> = accountsRaw ? JSON.parse(accountsRaw) : {};
-    const account = accounts[email.toLowerCase()];
-    if (!account) throw new Error("No account found. Please sign up first.");
-    if (account.password !== password) throw new Error("Incorrect password.");
-    setUser({ id: email.toLowerCase(), name: account.name, email });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
   };
 
   const signup = async (name: string, email: string, password: string) => {
-    if (!name || !email || !password) throw new Error("All fields are required");
-    const accountsRaw = localStorage.getItem("mira-accounts");
-    const accounts: Record<string, { name: string; password: string }> = accountsRaw ? JSON.parse(accountsRaw) : {};
-    if (accounts[email.toLowerCase()]) throw new Error("Account already exists. Please log in.");
-    accounts[email.toLowerCase()] = { name, password };
-    localStorage.setItem("mira-accounts", JSON.stringify(accounts));
-    setUser({ id: email.toLowerCase(), name, email });
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: name,
+        },
+      },
+    });
+    if (error) throw error;
   };
 
-  const logout = () => setUser(null);
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  };
 
-  return <AuthContext.Provider value={{ user, login, signup, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
+      {/* Prevent app flicker by waiting for the initial auth check */}
+      {!loading && children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {

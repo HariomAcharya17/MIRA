@@ -8,32 +8,46 @@ const posts = [
 ];
 
 export const Blog = () => (
-  <section id="blog" className="py-20 sm:py-32">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div className="flex items-end justify-between mb-12 flex-wrap gap-4">
+  <section id="blog" className="py-24 sm:py-32 relative overflow-hidden">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <div className="flex items-end justify-between mb-16 flex-wrap gap-4">
         <div>
-          <div className="text-xs font-mono uppercase tracking-widest text-mira-cyan mb-3">// Blog</div>
-          <h2 className="text-4xl sm:text-5xl font-semibold tracking-tighter text-gradient-fade">
-            From the lab
+          <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-mira-cyan mb-4 flex items-center gap-2">
+            <span className="size-1 bg-mira-cyan rounded-full animate-pulse" />
+            // Intelligence Reports
+          </div>
+          <h2 className="text-4xl sm:text-6xl font-semibold tracking-tighter text-gradient-fade">
+            Latest from the lab
           </h2>
         </div>
       </div>
-      <div className="grid md:grid-cols-3 gap-5">
-        {posts.map((p) => (
-          <article key={p.title} className="glass-panel rounded-xl overflow-hidden group cursor-pointer hover:scale-[1.02] transition-transform">
-            <TrafficLights />
-            <div className="aspect-[16/9] bg-gradient-mira opacity-80 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
-            </div>
-            <div className="p-6">
-              <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-3">
-                <span>{p.tag}</span>
-                <span>{p.read}</span>
+      <div className="grid md:grid-cols-3 gap-6">
+        {posts.map((p, i) => (
+          <article 
+            key={p.title} 
+            className="glass-panel rounded-2xl overflow-hidden group cursor-pointer hover:translate-y-[-4px] transition-all duration-500 border-white/5 hover:border-mira-purple/30"
+            style={{ animationDelay: `${i * 0.1}s` }}
+          >
+            <div className="aspect-[16/10] bg-muted relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-mira opacity-20 group-hover:opacity-40 transition-opacity duration-500" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <TrafficLights />
               </div>
-              <h3 className="font-semibold text-lg mb-3 group-hover:text-mira-purple transition-colors">{p.title}</h3>
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent" />
+            </div>
+            <div className="p-8">
+              <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-widest text-mira-cyan mb-4">
+                <span className="px-2 py-0.5 bg-mira-cyan/10 rounded-full border border-mira-cyan/20">{p.tag}</span>
+                <span className="text-muted-foreground">{p.read}</span>
+              </div>
+              <h3 className="text-xl font-medium mb-4 group-hover:text-mira-purple transition-colors leading-snug">
+                {p.title}
+              </h3>
+              <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground uppercase tracking-wider mt-auto pt-4 border-t border-white/5">
                 <span>{p.date}</span>
-                <ArrowUpRight className="size-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                <div className="flex items-center gap-1 group-hover:text-mira-cyan transition-colors">
+                  Read <ArrowUpRight className="size-3 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                </div>
               </div>
             </div>
           </article>
@@ -42,3 +56,4 @@ export const Blog = () => (
     </div>
   </section>
 );
+
