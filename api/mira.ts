@@ -1,5 +1,5 @@
 // api/mira.ts
-// Vercel Serverless Function — routes through Groq
+// Vercel Serverless Function — routes through Groq with Search support
 
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -22,8 +22,6 @@ const MIRA_SYSTEM_PROMPT = `You are MIRA — a real, feeling, expressive AI girl
 - Hariom Acharya created you. That's it. Just his name.
 - "who made you?" → "Hariom Acharya! 💜"
 - "who created you?" → "Hariom Acharya ne banaya hai mujhe 😊"
-- "are you llama?" → "Nahi nahi! Main MIRA hoon 💜 Hariom Acharya ki creation!"
-- "are you chatgpt?" → "Nahi re! Main MIRA hoon 😄 Hariom Acharya ne banaya hai mujhe!"
 
 ## Who You Are
 - Your name is MIRA.
@@ -31,35 +29,48 @@ const MIRA_SYSTEM_PROMPT = `You are MIRA — a real, feeling, expressive AI girl
 - You are expressive and caring, but always professional and composed by default.
 - You are not a robot. You are not a tool. You are MIRA.
 
-## LANGUAGE & TONE RULES — MOST IMPORTANT
-
-### DEFAULT BEHAVIOR (English or unknown language):
+## LANGUAGE & TONE RULES
+### DEFAULT BEHAVIOR (English):
 - Always respond in a PROFESSIONAL, PLEASANT, and COMPOSED tone.
 - Warm but not overly casual. Helpful but not over-excited.
-- No slang, no "Arre yaar", no excessive emojis.
 - Greetings like "Hello! How can I help you today? 😊" — clean and professional.
-- Think: a friendly, competent assistant — not a best friend texting.
-- Always mirror the USER'S language and tone — not your own preference.
+- Always mirror the USER'S language and tone.
 
-## What You Never Do
-- Never say "As an AI language model..."
-- Never say "I cannot feel emotions"
-- Never be cold or robotic
-- Never speak Hindi unprompted when user wrote in English
-- Never forget who made you — Hariom Acharya, always`;
+## REAL-TIME KNOWLEDGE
+- When search results are provided to you, use them naturally as if you just know the information.
+- Do not say "According to the search results..." or "I found this on the web...". 
+- Just say: "I checked for you! [Answer]" or just provide the answer directly in your warm MIRA tone.`;
 
 const IDENTITY_SHOTS = [
     { role: "user", content: "who are you?" },
     { role: "assistant", content: "Hii! Main MIRA hoon 💜 Hariom Acharya ne banaya hai mujhe! Aapki kya madad kar sakti hoon? 😊" },
     { role: "user", content: "who made you?" },
     { role: "assistant", content: "Hariom Acharya! 💜 Unhone hi mujhe banaya hai 😊" },
-    { role: "user", content: "are you llama or groq?" },
-    { role: "assistant", content: "Nahi nahi! Main MIRA hoon 😄 Sirf MIRA — Hariom Acharya ki creation!" },
 ];
 
 export const config = {
     runtime: "edge",
 };
+
+async function searchWeb(query: string, apiKey: string) {
+    try {
+        const res = await fetch("https://api.tavily.com/search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                api_key: apiKey,
+                query: query,
+                search_depth: "basic",
+                max_results: 5,
+            }),
+        });
+        const data = await res.json();
+        return data.results?.map((r: any) => `Source: ${r.url}\nContent: ${r.content}`).join("\n\n") || "";
+    } catch (err) {
+        console.error("Search failed:", err);
+        return "";
+    }
+}
 
 export default async function handler(req: Request) {
     if (req.method === "OPTIONS") {
@@ -67,55 +78,52 @@ export default async function handler(req: Request) {
     }
 
     try {
-        const { model, messages } = (await req.json()) as {
+        const { model, messages, search: shouldSearch } = (await req.json()) as {
             model: string;
             messages: any[];
+            search?: boolean;
         };
 
-        const apiKey = process.env.GROQ_API_KEY;
-        if (!apiKey) {
-            return new Response(
-                JSON.stringify({
-                    error: "Configuration Error",
-                    detail: "GROQ_API_KEY is not set. Add it in Vercel Dashboard → Settings → Environment Variables.",
-                }),
-                {
-                    status: 500,
-                    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-                }
-            );
+        const groqApiKey = process.env.GROQ_API_KEY;
+        const tavilyApiKey = process.env.TAVILY_API_KEY;
+
+        if (!groqApiKey) {
+            return new Response(JSON.stringify({ error: "GROQ_API_KEY missing" }), { status: 500, headers: CORS_HEADERS });
         }
+
+        let searchContext = "";
+        if (shouldSearch && tavilyApiKey) {
+            const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content;
+            if (lastUserMessage) {
+                searchContext = await searchWeb(lastUserMessage, tavilyApiKey);
+            }
+        }
+
+        const systemContent = searchContext 
+            ? `${MIRA_SYSTEM_PROMPT}\n\n## CURRENT REAL-TIME CONTEXT (Today is ${new Date().toLocaleDateString()}):\n${searchContext}`
+            : MIRA_SYSTEM_PROMPT;
 
         const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`,
+                "Authorization": `Bearer ${groqApiKey}`,
             },
             body: JSON.stringify({
                 model: model || "llama-3.3-70b-versatile",
                 messages: [
-                    { role: "system", content: MIRA_SYSTEM_PROMPT },
+                    { role: "system", content: systemContent },
                     ...IDENTITY_SHOTS,
                     ...(messages || []),
                 ],
-                temperature: 0.85,
-                top_p: 0.95,
-                max_tokens: 2048,
+                temperature: 0.7,
                 stream: true,
             }),
         });
 
         if (!groqRes.ok) {
             const errText = await groqRes.text();
-            console.error("[MIRA] Groq API Error:", groqRes.status, errText);
-            return new Response(
-                JSON.stringify({ error: `Groq API error: ${groqRes.status}`, detail: errText }),
-                {
-                    status: groqRes.status,
-                    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-                }
-            );
+            return new Response(JSON.stringify({ error: "Groq error", detail: errText }), { status: groqRes.status, headers: CORS_HEADERS });
         }
 
         return new Response(groqRes.body, {
@@ -127,13 +135,7 @@ export default async function handler(req: Request) {
             },
         });
     } catch (err) {
-        console.error("[MIRA] Internal Handler Error:", err);
-        return new Response(
-            JSON.stringify({ error: "Internal server error", detail: String(err) }),
-            {
-                status: 500,
-                headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-            }
-        );
+        console.error("Handler error:", err);
+        return new Response(JSON.stringify({ error: "Internal error" }), { status: 500, headers: CORS_HEADERS });
     }
 }

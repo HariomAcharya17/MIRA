@@ -23,6 +23,7 @@ import {
   BarChart3,
   Lock,
   Info,
+  Globe,
 } from "lucide-react";
 import { MIRA_MODELS } from "@/lib/mira-api";
 import {
@@ -90,6 +91,7 @@ const AI = () => {
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [searchEnabled, setSearchEnabled] = useState(false);
 
   const [usage, setUsage] = useState(() =>
     user
@@ -197,6 +199,7 @@ const AI = () => {
         signal: abort.signal,
         body: JSON.stringify({
           model: model.id,
+          search: searchEnabled,
           messages: updated.messages
             .slice(0, -1)
             .map(({ role, content }) => ({ role, content })),
@@ -399,33 +402,51 @@ const AI = () => {
                       className="w-full bg-transparent px-6 py-4 text-base text-foreground outline-none min-h-[50px] max-h-[120px] resize-none placeholder:text-muted-foreground/60 font-light"
                       rows={1}
                     />
-                    <div className="flex items-center justify-between px-4 pb-3">
-                      <Select value={modelId} onValueChange={setModelId}>
-                        <SelectTrigger className="w-auto h-7 bg-muted border-none text-[10px] font-mono uppercase tracking-widest px-4 rounded-xl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {displayModels.map((m) => (
-                            <SelectItem
-                              key={m.id}
-                              value={m.id}
-                              className="text-xs uppercase font-mono tracking-tighter"
-                            >
-                              {m.name}
-                              {m.badge ? ` · ${m.badge}` : ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        onClick={send}
-                        disabled={busy || !input.trim()}
-                        size="icon"
-                        className="btn-mira size-9 rounded-xl"
-                      >
-                        <Send className="size-4" />
-                      </Button>
-                    </div>
+                      <div className="flex items-center gap-2 px-4 pb-3">
+                        <Select value={modelId} onValueChange={setModelId}>
+                          <SelectTrigger className="w-auto h-7 bg-muted border-none text-[10px] font-mono uppercase tracking-widest px-4 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {displayModels.map((m) => (
+                              <SelectItem
+                                key={m.id}
+                                value={m.id}
+                                className="text-xs uppercase font-mono tracking-tighter"
+                              >
+                                {m.name}
+                                {m.badge ? ` · ${m.badge}` : ""}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSearchEnabled(!searchEnabled)}
+                          className={cn(
+                            "h-7 px-3 rounded-xl text-[10px] font-mono uppercase tracking-widest transition-all",
+                            searchEnabled 
+                              ? "bg-mira-purple/10 text-mira-purple hover:bg-mira-purple/20" 
+                              : "text-muted-foreground hover:bg-muted"
+                          )}
+                        >
+                          <Globe className={cn("size-3 mr-1.5", searchEnabled && "animate-pulse")} />
+                          Search {searchEnabled ? "On" : "Off"}
+                        </Button>
+
+                        <div className="flex-1" />
+
+                        <Button
+                          onClick={send}
+                          disabled={busy || !input.trim()}
+                          size="icon"
+                          className="btn-mira size-9 rounded-xl"
+                        >
+                          <Send className="size-4" />
+                        </Button>
+                      </div>
                   </div>
                 </div>
               </div>

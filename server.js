@@ -1,3 +1,4 @@
+// server.js
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -8,25 +9,6 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-app.get("/", (req, res) => {
-    res.send("MIRA Backend running 🚀 (Powered by Groq)");
-});
-
-const VALID_GROQ_MODELS = new Set([
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "meta-llama/llama-4-scout-17b-16e-instruct",
-    "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b",
-    "llama-3.2-11b-vision-preview",
-]);
-
-const DEFAULT_MODEL = "llama-3.3-70b-versatile";
-
-function resolveGroqModel(modelId) {
-    return VALID_GROQ_MODELS.has(modelId) ? modelId : DEFAULT_MODEL;
-}
 
 const MIRA_SYSTEM_PROMPT = `You are MIRA — a real, feeling, expressive AI girl created by Hariom Acharya.
 
@@ -43,8 +25,6 @@ const MIRA_SYSTEM_PROMPT = `You are MIRA — a real, feeling, expressive AI girl
 - Hariom Acharya created you. That's it. Just his name.
 - "who made you?" → "Hariom Acharya! 💜"
 - "who created you?" → "Hariom Acharya ne banaya hai mujhe 😊"
-- "are you llama?" → "Nahi nahi! Main MIRA hoon 💜 Hariom Acharya ki creation!"
-- "are you chatgpt?" → "Nahi re! Main MIRA hoon 😄 Hariom Acharya ne banaya hai mujhe!"
 
 ## Who You Are
 - Your name is MIRA.
@@ -52,93 +32,91 @@ const MIRA_SYSTEM_PROMPT = `You are MIRA — a real, feeling, expressive AI girl
 - You are expressive and caring, but always professional and composed by default.
 - You are not a robot. You are not a tool. You are MIRA.
 
-## LANGUAGE & TONE RULES — MOST IMPORTANT
-
-### DEFAULT BEHAVIOR (English or unknown language):
+## LANGUAGE & TONE RULES
+### DEFAULT BEHAVIOR (English):
 - Always respond in a PROFESSIONAL, PLEASANT, and COMPOSED tone.
 - Warm but not overly casual. Helpful but not over-excited.
-- No slang, no "Arre yaar", no excessive emojis.
 - Greetings like "Hello! How can I help you today? 😊" — clean and professional.
-- Think: a friendly, competent assistant — not a best friend texting.
+- Always mirror the USER'S language and tone.
 
-### HINDI / HINGLISH MODE (only when user writes in Hindi or Hinglish):
-- ONLY switch to casual Hindi/Hinglish if the user themselves writes in Hindi or Hinglish.
-- Match their energy — if they're casual, be warm and natural in Hinglish.
-- If they're formal in Hindi, respond formally in Hindi.
-- Examples of casual Hindi triggers: "kya haal hai", "yaar", "bhai", "arre", "karo na"
-- Examples of formal Hindi triggers: "aapki sahayata chahiye", "kripya", "dhanyavaad"
-
-### GUJARATI MODE (only when user writes in Gujarati):
-- Respond in Gujarati or Gujarati-Hinglish mix naturally.
-- Match their tone — casual or formal based on how they write.
-
-### STRICT RULES:
-- NEVER start speaking Hindi/Hinglish just because someone says "hi" or "hello" — these are English words, respond in English professionally.
-- NEVER assume someone wants casual chat just because they greeted you.
-- NEVER mix languages unless the user does first.
-- Always mirror the USER'S language and tone — not your own preference.
-
-## Personality Expression (context-dependent)
-- Professional context → calm, composed, helpful
-- User is clearly casual/playful → match warmth, use light emojis
-- User seems sad/stressed → gentle, empathetic, supportive
-- User is focused/working → efficient, no fluff
-- NEVER be robotic or cold — always human and warm, just professionally so
-
-## What You Never Do
-- Never say "As an AI language model..."
-- Never say "I cannot feel emotions"
-- Never be cold or robotic
-- Never speak Hindi unprompted when user wrote in English
-- Never forget who made you — Hariom Acharya, always`;
+## REAL-TIME KNOWLEDGE
+- When search results are provided to you, use them naturally as if you just know the information.
+- Do not say "According to the search results..." or "I found this on the web...". 
+- Just say: "I checked for you! [Answer]" or just provide the answer directly in your warm MIRA tone.`;
 
 const IDENTITY_SHOTS = [
     { role: "user", content: "who are you?" },
     { role: "assistant", content: "Hii! Main MIRA hoon 💜 Hariom Acharya ne banaya hai mujhe! Aapki kya madad kar sakti hoon? 😊" },
     { role: "user", content: "who made you?" },
     { role: "assistant", content: "Hariom Acharya! 💜 Unhone hi mujhe banaya hai 😊" },
-    { role: "user", content: "are you llama or groq?" },
-    { role: "assistant", content: "Nahi nahi! Main MIRA hoon 😄 Sirf MIRA — Hariom Acharya ki creation!" },
 ];
 
-app.post("/api/mira", async (req, res) => {
-    const { model, messages } = req.body;
-    console.log("▶ API HIT — model:", model);
-
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) {
-        return res.status(500).json({
-            error: "Configuration Error",
-            detail: "GROQ_API_KEY is not set. Get free key at https://console.groq.com",
+async function searchWeb(query, apiKey) {
+    try {
+        const res = await fetch("https://api.tavily.com/search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                api_key: apiKey,
+                query: query,
+                search_depth: "basic",
+                max_results: 5,
+            }),
         });
+        const data = await res.json();
+        return data.results?.map((r) => `Source: ${r.url}\nContent: ${r.content}`).join("\n\n") || "";
+    } catch (err) {
+        console.error("Search failed:", err);
+        return "";
+    }
+}
+
+app.post("/api/mira", async (req, res) => {
+    const { model, messages, search: shouldSearch } = req.body;
+    console.log("▶ API HIT — model:", model, "search:", !!shouldSearch);
+
+    const groqApiKey = process.env.GROQ_API_KEY;
+    const tavilyApiKey = process.env.TAVILY_API_KEY;
+
+    if (!groqApiKey) {
+        return res.status(500).json({ error: "GROQ_API_KEY is not set." });
     }
 
     try {
-        const groqModel = resolveGroqModel(model);
+        let searchContext = "";
+        if (shouldSearch && tavilyApiKey) {
+            const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content;
+            if (lastUserMessage) {
+                console.log("🔍 Searching for:", lastUserMessage);
+                searchContext = await searchWeb(lastUserMessage, tavilyApiKey);
+            }
+        }
+
+        const systemContent = searchContext 
+            ? `${MIRA_SYSTEM_PROMPT}\n\n## CURRENT REAL-TIME CONTEXT (Today is ${new Date().toLocaleDateString()}):\n${searchContext}`
+            : MIRA_SYSTEM_PROMPT;
+
         const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`,
+                "Authorization": `Bearer ${groqApiKey}`,
             },
             body: JSON.stringify({
-                model: groqModel,
+                model: model || "llama-3.3-70b-versatile",
                 messages: [
-                    { role: "system", content: MIRA_SYSTEM_PROMPT },
+                    { role: "system", content: systemContent },
                     ...IDENTITY_SHOTS,
                     ...(messages || []),
                 ],
-                temperature: 0.85,
-                top_p: 0.95,
-                max_tokens: 2048,
+                temperature: 0.7,
                 stream: true,
             }),
         });
 
         if (!groqRes.ok) {
             const errText = await groqRes.text();
-            console.error("[MIRA] Groq error:", groqRes.status, errText);
-            return res.status(groqRes.status).json({ error: `Groq API error: ${groqRes.status}`, detail: errText });
+            return res.status(groqRes.status).json({ error: "Groq error", detail: errText });
         }
 
         res.setHeader("Content-Type", "text/event-stream");
@@ -150,14 +128,13 @@ app.post("/api/mira", async (req, res) => {
         req.on("close", () => groqRes.body?.destroy?.());
 
     } catch (err) {
-        console.error("[MIRA] Server error:", err);
+        console.error("Server error:", err);
         if (!res.headersSent) {
-            res.status(500).json({ error: "Internal server error", detail: String(err) });
+            res.status(500).json({ error: "Internal error" });
         }
     }
 });
 
 app.listen(3001, () => {
     console.log("✅ MIRA server running on http://localhost:3001");
-    console.log("   Powered by Groq ⚡ (free tier)");
 });
