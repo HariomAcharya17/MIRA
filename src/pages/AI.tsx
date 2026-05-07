@@ -55,7 +55,6 @@ const AI = () => {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // Bug fix: scope usage to current user, reset when user changes
   const [usage, setUsage] = useState(() => user ? getUsage() : {
     totalTokens: 0, promptTokens: 0, completionTokens: 0,
     requests: 0, byModel: {}, history: []
@@ -72,7 +71,6 @@ const AI = () => {
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
-      // abort any in-progress stream
       abortRef.current?.abort();
       setBusy(false);
     } else {
@@ -96,7 +94,6 @@ const AI = () => {
     }
   }, [session.messages, busy]);
 
-  // Bug fix 3: abort stream on page navigation
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
@@ -140,7 +137,6 @@ const AI = () => {
     try {
       let fullContent = "";
 
-      // 🔥 BACKEND CALL — /api/mira (Vercel Edge Function in prod, Vite proxy → Express in dev)
       const response = await fetch("/api/mira", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -169,19 +165,15 @@ const AI = () => {
         if (done) break;
         if (abort.signal.aborted) break;
 
-        // Accumulate chunks in a buffer (chunks may split across SSE lines)
         buffer += decoder.decode(value, { stream: true });
-
-        // Process all complete lines in the buffer
         const lines = buffer.split("\n");
-        // Keep the last (possibly incomplete) line in the buffer
         buffer = lines.pop() ?? "";
 
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed.startsWith("data:")) continue;
 
-          const jsonStr = trimmed.slice(5).trim(); // strip "data: "
+          const jsonStr = trimmed.slice(5).trim();
           if (jsonStr === "[DONE]") break;
           if (!jsonStr) continue;
 
@@ -191,7 +183,6 @@ const AI = () => {
             if (typeof delta === "string" && delta.length > 0) {
               fullContent += delta;
 
-              // Live-update the assistant message bubble
               setSession((prev) => ({
                 ...prev,
                 messages: prev.messages.map((m) =>
@@ -199,17 +190,15 @@ const AI = () => {
                 ),
               }));
 
-              // Track token usage in real-time
               recordUsage(model.id, 0, Math.ceil(delta.length / 3.8));
               setUsage(getUsage());
             }
           } catch {
-            // Ignore malformed JSON lines (NVIDIA sometimes sends empty keep-alives)
+            // Ignore malformed JSON lines
           }
         }
       }
 
-      // Persist session after stream completes
       if (!abort.signal.aborted) {
         const finalSession: ChatSession = {
           ...updated,
