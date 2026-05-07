@@ -24,6 +24,7 @@ import {
   Lock,
   Info,
   Globe,
+  Zap,
 } from "lucide-react";
 import { MIRA_MODELS } from "@/lib/mira-api";
 import {
