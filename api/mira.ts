@@ -79,6 +79,7 @@ export default async function handler(req: Request) {
             messages: [{ role: "system", content: finalSystemPrompt }, ...messages],
             temperature: 0.6,
             stream: true,
+            stream_options: { include_usage: true },
         };
 
         let groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {

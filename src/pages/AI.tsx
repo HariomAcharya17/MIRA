@@ -236,18 +236,23 @@ const AI = () => {
 
           try {
             const parsed = JSON.parse(jsonStr);
+            
+            // 1. Handle actual content delta
             const delta = parsed?.choices?.[0]?.delta?.content;
             if (typeof delta === "string" && delta.length > 0) {
               fullContent += delta;
-
               setSession((prev) => ({
                 ...prev,
                 messages: prev.messages.map((m) =>
                   m.id === assistantId ? { ...m, content: fullContent } : m
                 ),
               }));
+            }
 
-              recordUsage(model.id, 0, Math.ceil(delta.length / 3.8));
+            // 2. Handle final usage report from Groq
+            if (parsed?.usage) {
+              const { prompt_tokens, completion_tokens } = parsed.usage;
+              recordUsage(model.id, prompt_tokens, completion_tokens);
               setUsage(getUsage());
             }
           } catch {
@@ -265,12 +270,6 @@ const AI = () => {
           updatedAt: Date.now(),
         };
         upsertSession(finalSession);
-        recordUsage(
-          model.id,
-          Math.ceil(userPrompt.length / 4),
-          Math.ceil(fullContent.length / 4)
-        );
-        setUsage(getUsage());
       }
     } catch (e: any) {
       if (e?.name === "AbortError" || abort.signal.aborted) return;
@@ -306,8 +305,8 @@ const AI = () => {
     toast.success("Session Exported");
   };
 
-  const QUOTA = 1_000_000;
-  const usedTokens = usage.totalTokens;
+  const usedTokens = user?.tokens_used ?? usage.totalTokens;
+  const QUOTA = user?.tokens_limit ?? 1_000_000;
   const remainingTokens = Math.max(QUOTA - usedTokens, 0);
   const usedPct = Math.min((usedTokens / QUOTA) * 100, 100);
 
@@ -537,7 +536,7 @@ const AI = () => {
                 </div>
                 <div className="flex justify-between text-[8px] font-mono text-muted-foreground/30">
                   <span>0</span>
-                  <span>1,000,000</span>
+                  <span>{QUOTA.toLocaleString()}</span>
                 </div>
               </div>
 
@@ -546,7 +545,7 @@ const AI = () => {
               <div className="space-y-3">
                 <MetaLine icon={ShieldCheck} label="Identity" value="Secured" />
                 <MetaLine icon={Hash} label="Protocol" value="Verified" />
-                <MetaLine icon={Lock} label="Storage" value="Local" />
+                <MetaLine icon={Lock} label="Storage" value="Cloud Sync" />
               </div>
 
               <div className="mt-auto p-4 rounded-2xl bg-muted/20 border border-border space-y-1.5">

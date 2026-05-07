@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
 
-type User = { id: string; name: string; email: string };
+type User = { id: string; name: string; email: string; tokens_used: number; tokens_limit: number };
 type AuthContextType = {
   user: User | null;
   loading: boolean;
@@ -17,25 +17,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const fetchProfile = async (userId: string) => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("tokens_used, tokens_limit")
+        .eq("id", userId)
+        .single();
+      return data;
+    };
+
     // 1. Check for an existing session on load
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
+        const profile = await fetchProfile(session.user.id);
         setUser({
           id: session.user.id,
           name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || "Operator",
           email: session.user.email || "",
+          tokens_used: profile?.tokens_used || 0,
+          tokens_limit: profile?.tokens_limit || 1000000,
         });
       }
       setLoading(false);
     });
 
-    // 2. Listen for auth state changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // 2. Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
+        const profile = await fetchProfile(session.user.id);
         setUser({
           id: session.user.id,
           name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || "Operator",
           email: session.user.email || "",
+          tokens_used: profile?.tokens_used || 0,
+          tokens_limit: profile?.tokens_limit || 1000000,
         });
       } else {
         setUser(null);

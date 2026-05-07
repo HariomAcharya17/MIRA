@@ -1,4 +1,3 @@
-import { Github, Instagram, Linkedin } from "lucide-react";
 
 export const Footer = () => (
   <footer className="relative mt-32 pb-20 overflow-hidden border-t border-border/40">
@@ -23,13 +22,6 @@ export const Footer = () => (
           </p>
         </div>
 
-        {/* Social Links */}
-        <div className="flex items-center gap-5 sm:gap-8 mb-20 relative">
-          <div className="absolute inset-0 bg-mira-purple/10 blur-3xl rounded-full -z-10" />
-          <SocialLink href="https://github.com/" icon={<Github className="size-6 sm:size-7" />} label="GitHub" />
-          <SocialLink href="https://linkedin.com/" icon={<Linkedin className="size-6 sm:size-7" />} label="LinkedIn" />
-          <SocialLink href="https://instagram.com/" icon={<Instagram className="size-6 sm:size-7" />} label="Instagram" />
-        </div>
 
         {/* Final Credit Line */}
         <div className="w-full flex flex-col sm:flex-row justify-between items-center pt-10 border-t border-border/40 gap-6 opacity-60">
@@ -51,16 +43,4 @@ export const Footer = () => (
   </footer>
 );
 
-const SocialLink = ({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) => (
-  <a 
-    href={href} 
-    target="_blank" 
-    rel="noopener noreferrer"
-    className="size-14 sm:size-16 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-white/[0.08] hover:border-mira-purple/40 hover:shadow-[0_0_30px_-10px_hsl(var(--mira-purple)/0.4)] transition-all duration-500 group"
-    aria-label={label}
-  >
-    <div className="transition-transform duration-500 group-hover:scale-110 group-active:scale-95">
-      {icon}
-    </div>
-  </a>
-);
+
