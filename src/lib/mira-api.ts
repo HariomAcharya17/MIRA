@@ -52,13 +52,4 @@ export const MIRA_MODELS: MiraModel[] = [
     contextWindow: "128K",
     badge: "FREE",
   },
-
-  {
-    id: "llama-3.2-11b-vision-preview",
-    name: "Llama 3.2 11B Vision",
-    description: "Multimodal — text + image understanding",
-    category: "vision",
-    contextWindow: "128K",
-    badge: "FREE",
-  },
 ];
