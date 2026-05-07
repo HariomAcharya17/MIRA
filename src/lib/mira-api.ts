@@ -1,109 +1,64 @@
-export type NvidiaModel = {
+// src/lib/mira-api.ts
+// All models route through Groq (free tier — no credit card needed).
+// Get your free key at: https://console.groq.com
+
+export type MiraModel = {
   id: string;
   name: string;
   description: string;
   category: "reasoning" | "code" | "vision" | "general" | "multimodal" | "speech";
   contextWindow: string;
+  badge?: string;
 };
 
-export const NVIDIA_MODELS: NvidiaModel[] = [
+export const MIRA_MODELS: MiraModel[] = [
   {
-    id: "meta/llama-3.3-70b-instruct",
+    id: "llama-3.3-70b-versatile",
     name: "Llama 3.3 70B",
-    description: "Meta's best open reasoning model, 128K context",
+    description: "Meta's best — fast, smart, versatile",
     category: "reasoning",
     contextWindow: "128K",
+    badge: "FAST",
   },
   {
-    id: "nvidia/llama-3.1-nemotron-70b-instruct",
-    name: "Nemotron 70B",
-    description: "NVIDIA-tuned Llama for instruction following",
-    category: "reasoning",
-    contextWindow: "128K",
-  },
-  {
-    id: "meta/llama-3.1-8b-instruct",
+    id: "llama-3.1-8b-instant",
     name: "Llama 3.1 8B",
-    description: "Fast, lightweight instruction model",
+    description: "Ultra-fast, lightweight, instant replies",
     category: "general",
     contextWindow: "128K",
+    badge: "INSTANT",
   },
   {
-    id: "meta/llama-4-maverick-17b-128e-instruct",
-    name: "Llama 4 Maverick",
-    description: "Multimodal 128-expert MoE model",
-    category: "multimodal",
-    contextWindow: "128K",
-  },
-  {
-    id: "mistralai/mistral-7b-instruct-v0.3",
-    name: "Mistral 7B",
-    description: "Fast multilingual instruction model",
-    category: "general",
-    contextWindow: "32K",
-  },
-  {
-    id: "microsoft/phi-3-mini-4k-instruct",
-    name: "Phi-3 Mini",
-    description: "Small but capable reasoning model",
-    category: "code",
-    contextWindow: "4K",
-  },
-  // ── New Models ──
-  {
-    id: "zhipuai/glm-4-9b-chat",
-    name: "GLM-4.7",
-    description: "ZhipuAI's multilingual chat model",
-    category: "general",
-    contextWindow: "128K",
-  },
-  {
-    id: "deepseek-ai/deepseek-r1-distill-qwen-7b",
-    name: "DeepSeek V4 Flash",
-    description: "Fast DeepSeek reasoning distill model",
-    category: "reasoning",
-    contextWindow: "64K",
-  },
-  {
-    id: "google/gemma-3-27b-it",
-    name: "Gemma 4 31B",
-    description: "Google's open instruction-tuned model",
-    category: "general",
-    contextWindow: "128K",
-  },
-  {
-    id: "meta/llama-3.1-70b-instruct",
-    name: "Llama 3.1 70B",
-    description: "Meta's powerful 70B instruction model",
+    id: "meta-llama/llama-4-scout-17b-16e-instruct",
+    name: "Llama 4 Scout 17B",
+    description: "Latest Llama 4 — fast and capable",
     category: "reasoning",
     contextWindow: "128K",
+    badge: "NEW",
   },
   {
-    id: "microsoft/phi-4-mini-instruct",
-    name: "Phi-4 Mini",
-    description: "Microsoft's compact but powerful model",
-    category: "code",
-    contextWindow: "16K",
-  },
-  {
-    id: "nvidia/llama-3.1-nemotron-nano-8b-v1",
-    name: "Seed OSS 36B",
-    description: "Bytedance-style efficient reasoning model",
+    id: "openai/gpt-oss-120b",
+    name: "GPT OSS 120B",
+    description: "Massive 120B open model, very capable",
     category: "reasoning",
     contextWindow: "128K",
+    badge: "PRO",
   },
   {
-    id: "openai/gpt-4o-mini",
-    name: "GPT-OSS 120B",
-    description: "OpenAI-compatible large model via NVIDIA",
+    id: "openai/gpt-oss-20b",
+    name: "GPT OSS 20B",
+    description: "Fast 20B open model",
     category: "general",
     contextWindow: "128K",
+    badge: "FREE",
   },
+
   {
-    id: "moonshotai/moonshot-v1-8k",
-    name: "Kimi K2.6",
-    description: "Moonshot AI's efficient chat model",
-    category: "general",
+    id: "llama-3.2-11b-vision-preview",
+    name: "Llama 3.2 11B Vision",
+    description: "Multimodal — text + image understanding",
+    category: "vision",
     contextWindow: "128K",
+    badge: "FREE",
   },
 ];

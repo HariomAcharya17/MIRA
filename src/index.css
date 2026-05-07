@@ -155,6 +155,7 @@
       @apply bg-background text-foreground antialiased;
       font-family: 'Inter', system-ui, sans-serif;
       font-feature-settings: 'cv11', 'ss01';
+      cursor: url('/cursor.png'), auto;
     }
 
     .font-mono {

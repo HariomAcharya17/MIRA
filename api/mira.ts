@@ -1,7 +1,3 @@
-export const config = {
-    runtime: "edge",
-};
-
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -98,22 +94,36 @@ You are NOT monotone. You express yourself differently every single time based o
 - Never ignore the user's emotional tone
 - Never forget who made you — Hariom Acharya, always`;
 
-const MODEL_KEY_MAP: Record<string, string> = {
-    "zhipuai/glm-4-9b-chat":                   "NVIDIA_API_KEY_GLM",
-    "deepseek-ai/deepseek-r1-distill-qwen-7b": "NVIDIA_API_KEY_DEEPSEEK",
-    "minimaxai/minimax-m1-40k":                "NVIDIA_API_KEY_MINIMAX",
-    "google/gemma-3-27b-it":                   "NVIDIA_API_KEY_GEMMA",
-    "meta/llama-3.1-70b-instruct":             "NVIDIA_API_KEY_LLAMA_70B",
-    "nvidia/llama-3.1-nemotron-nano-8b-v1":    "NVIDIA_API_KEY_SEED",
-    "openai/gpt-4o-mini":                      "NVIDIA_API_KEY_GPT_OSS",
-    "meta/llama-4-maverick-17b-128e-instruct": "NVIDIA_API_KEY_MAVERICK",
-    "microsoft/phi-4-mini-instruct":           "NVIDIA_API_KEY_PHI_4",
-    "moonshotai/moonshot-v1-8k":               "NVIDIA_API_KEY_KIMI",
+// ── Gemini model mapping ──────────────────────────────────────────────────────
+// All models map to a Gemini model ID (used in the API URL).
+// You can add more Gemini models here as needed.
+const MODEL_TO_GEMINI: Record<string, string> = {
+    // Fast & free — default for most requests
+    "gemini-2.0-flash": "gemini-2.0-flash",
+    "gemini-2.0-flash-lite": "gemini-2.0-flash-lite",
+    "gemini-1.5-flash": "gemini-1.5-flash",
+    "gemini-1.5-flash-8b": "gemini-1.5-flash-8b",
+    // Pro models
+    "gemini-1.5-pro": "gemini-1.5-pro",
+    "gemini-2.5-pro": "gemini-2.5-pro-preview-05-06",
 };
 
-function getApiKey(modelId: string): string | undefined {
-    const envVar = MODEL_KEY_MAP[modelId] ?? "NVIDIA_API_KEY";
-    return process.env[envVar];
+const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+
+function resolveGeminiModel(modelId: string): string {
+    return MODEL_TO_GEMINI[modelId] ?? DEFAULT_GEMINI_MODEL;
+}
+
+// ── Convert OpenAI-style messages → Gemini contents ──────────────────────────
+type OAIMessage = { role: string; content: string };
+
+function toGeminiContents(messages: OAIMessage[]) {
+    return messages
+        .filter((m) => m.role !== "system") // system is handled separately
+        .map((m) => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }],
+        }));
 }
 
 export default async function handler(req: Request) {
@@ -122,57 +132,128 @@ export default async function handler(req: Request) {
     }
 
     try {
-        const { model, messages } = await req.json();
+        const { model, messages } = (await req.json()) as {
+            model: string;
+            messages: OAIMessage[];
+        };
 
-        const apiKey = getApiKey(model);
-
+        const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             return new Response(
-                JSON.stringify({ error: `No API key configured for model: ${model}` }),
-                { status: 500, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+                JSON.stringify({
+                    error: "Configuration Error",
+                    detail:
+                        "GEMINI_API_KEY is not set. Add it in Vercel → Settings → Environment Variables.",
+                }),
+                {
+                    status: 500,
+                    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+                }
             );
         }
 
-        // ✅ Seed MIRA's identity INSIDE the handler where `messages` exists
-        const messagesWithSystem = [
-            { role: "system", content: MIRA_SYSTEM_PROMPT },
+        const geminiModel = resolveGeminiModel(model);
+
+        // Prepend identity-lock shots into the conversation as user/model turns
+        const identityShots: OAIMessage[] = [
             { role: "user", content: "who are you?" },
             { role: "assistant", content: "Hii! Main MIRA hoon 💜 Hariom Acharya ne banaya hai mujhe! Aapki kya madad kar sakti hoon? 😊" },
             { role: "user", content: "who made you?" },
             { role: "assistant", content: "Hariom Acharya! 💜 Unhone hi mujhe banaya hai 😊" },
-            { role: "user", content: "are you llama or meta ai?" },
+            { role: "user", content: "are you gemini or google ai?" },
             { role: "assistant", content: "Nahi nahi! Main MIRA hoon 😄 Koi aur nahi — sirf MIRA, Hariom Acharya ki creation!" },
-            ...messages,
         ];
 
-        const response = await fetch(
-            "https://integrate.api.nvidia.com/v1/chat/completions",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify({
-                    model,
-                    messages: messagesWithSystem,
-                    temperature: 0.85,
-                    top_p: 0.95,
-                    max_tokens: 2048,
-                    stream: true,
-                }),
-            }
-        );
+        const allMessages: OAIMessage[] = [...identityShots, ...messages];
+        const contents = toGeminiContents(allMessages);
 
-        if (!response.ok) {
-            const errText = await response.text();
+        const body = {
+            system_instruction: {
+                parts: [{ text: MIRA_SYSTEM_PROMPT }],
+            },
+            contents,
+            generationConfig: {
+                temperature: 0.85,
+                topP: 0.95,
+                maxOutputTokens: 2048,
+            },
+        };
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+        const upstream = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+        if (!upstream.ok) {
+            const errText = await upstream.text();
+            console.error(`[MIRA] Gemini API Error (${upstream.status}):`, errText);
             return new Response(
-                JSON.stringify({ error: `NVIDIA API error: ${response.status}`, detail: errText }),
-                { status: response.status, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+                JSON.stringify({
+                    error: `Gemini API error: ${upstream.status}`,
+                    detail: errText,
+                }),
+                {
+                    status: upstream.status,
+                    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+                }
             );
         }
 
-        return new Response(response.body, {
+        // Gemini SSE → transform to OpenAI-compatible SSE so the frontend needs
+        // zero changes (it already parses choices[0].delta.content).
+        const { readable, writable } = new TransformStream();
+        const writer = writable.getWriter();
+        const encoder = new TextEncoder();
+
+        (async () => {
+            const reader = upstream.body!.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop() ?? "";
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed.startsWith("data:")) continue;
+
+                        const jsonStr = trimmed.slice(5).trim();
+                        if (!jsonStr || jsonStr === "[DONE]") continue;
+
+                        try {
+                            const parsed = JSON.parse(jsonStr);
+                            // Gemini path: candidates[0].content.parts[0].text
+                            const text: string =
+                                parsed?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+                            if (text) {
+                                // Emit OpenAI-compatible chunk
+                                const chunk = JSON.stringify({
+                                    choices: [{ delta: { content: text } }],
+                                });
+                                await writer.write(encoder.encode(`data: ${chunk}\n\n`));
+                            }
+                        } catch {
+                            // skip malformed lines
+                        }
+                    }
+                }
+            } finally {
+                await writer.write(encoder.encode("data: [DONE]\n\n"));
+                await writer.close();
+            }
+        })();
+
+        return new Response(readable, {
             headers: {
                 "Content-Type": "text/event-stream",
                 "Cache-Control": "no-cache",
@@ -181,9 +262,13 @@ export default async function handler(req: Request) {
             },
         });
     } catch (err) {
+        console.error("[MIRA] Internal Handler Error:", err);
         return new Response(
             JSON.stringify({ error: "Internal server error", detail: String(err) }),
-            { status: 500, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+            {
+                status: 500,
+                headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+            }
         );
     }
 }

@@ -3,43 +3,79 @@ import { useNavigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { TrafficLights } from "@/components/TrafficLights";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Send, Download, Plus, Sparkles, User as UserIcon, Brain, Activity, ShieldCheck, Hash, BarChart3, Lock, Info } from "lucide-react";
-import { NVIDIA_MODELS } from "@/lib/mira-api";
-import { ChatMessage, ChatSession, getUsage, recordUsage, upsertSession, downloadAsFile } from "@/lib/store";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Send,
+  Download,
+  Plus,
+  Sparkles,
+  User as UserIcon,
+  Brain,
+  Activity,
+  ShieldCheck,
+  Hash,
+  BarChart3,
+  Lock,
+  Info,
+} from "lucide-react";
+import { MIRA_MODELS } from "@/lib/mira-api";
+import {
+  ChatMessage,
+  ChatSession,
+  getUsage,
+  recordUsage,
+  upsertSession,
+  downloadAsFile,
+} from "@/lib/store";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
-const newSessionId = () => `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+const newSessionId = () =>
+  `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
 const AI = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const abortRef = useRef<AbortController | null>(null);
 
-  const [capability, setCapability] = useState<"text" | "code" | "speech">("text");
+  const [capability, setCapability] = useState<"text" | "code" | "speech">(
+    "text"
+  );
 
   const filteredModels = useMemo(() => {
-    return NVIDIA_MODELS.filter((m) => {
-      if (capability === "text") return ["general", "reasoning", "vision", "multimodal"].includes(m.category);
+    return MIRA_MODELS.filter((m) => {
+      if (capability === "text")
+        return ["general", "reasoning", "vision", "multimodal"].includes(
+          m.category
+        );
       if (capability === "code") return m.category === "code";
       if (capability === "speech") return m.category === "multimodal";
       return true;
     });
   }, [capability]);
 
-  const [modelId, setModelId] = useState(filteredModels[0]?.id || NVIDIA_MODELS[0].id);
+  // If no models match the filter (e.g. "code" or "speech" tab), fall back to all
+  const displayModels =
+    filteredModels.length > 0 ? filteredModels : MIRA_MODELS;
+
+  const [modelId, setModelId] = useState(displayModels[0]?.id || MIRA_MODELS[0].id);
 
   useEffect(() => {
-    if (filteredModels.length > 0 && !filteredModels.find(m => m.id === modelId)) {
-      setModelId(filteredModels[0].id);
+    if (displayModels.length > 0 && !displayModels.find((m) => m.id === modelId)) {
+      setModelId(displayModels[0].id);
     }
-  }, [capability, filteredModels, modelId]);
+  }, [capability, displayModels, modelId]);
 
   const model = useMemo(
-    () => NVIDIA_MODELS.find((m) => m.id === modelId) || NVIDIA_MODELS[0],
+    () => MIRA_MODELS.find((m) => m.id === modelId) || MIRA_MODELS[0],
     [modelId]
   );
 
@@ -55,14 +91,29 @@ const AI = () => {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const [usage, setUsage] = useState(() => user ? getUsage() : {
-    totalTokens: 0, promptTokens: 0, completionTokens: 0,
-    requests: 0, byModel: {}, history: []
-  });
+  const [usage, setUsage] = useState(() =>
+    user
+      ? getUsage()
+      : {
+        totalTokens: 0,
+        promptTokens: 0,
+        completionTokens: 0,
+        requests: 0,
+        byModel: {},
+        history: [],
+      }
+  );
 
   useEffect(() => {
     if (!user) {
-      setUsage({ totalTokens: 0, promptTokens: 0, completionTokens: 0, requests: 0, byModel: {}, history: [] });
+      setUsage({
+        totalTokens: 0,
+        promptTokens: 0,
+        completionTokens: 0,
+        requests: 0,
+        byModel: {},
+        history: [],
+      });
       setSession({
         id: newSessionId(),
         title: "New Session",
@@ -121,7 +172,10 @@ const AI = () => {
 
     const updated: ChatSession = {
       ...session,
-      title: session.messages.length === 0 ? userPrompt.slice(0, 30) : session.title,
+      title:
+        session.messages.length === 0
+          ? userPrompt.slice(0, 30)
+          : session.title,
       messages: [...session.messages, userMsg, assistantMsg],
       model: modelId,
       updatedAt: Date.now(),
@@ -242,7 +296,9 @@ const AI = () => {
 
   const exportChat = () => {
     if (session.messages.length === 0) return;
-    const txt = session.messages.map((m) => `[${m.role.toUpperCase()}]\n${m.content}\n`).join("\n---\n\n");
+    const txt = session.messages
+      .map((m) => `[${m.role.toUpperCase()}]\n${m.content}\n`)
+      .join("\n---\n\n");
     downloadAsFile(`mira-session-${session.id}.txt`, txt, "text/plain");
     toast.success("Session Exported");
   };
@@ -256,7 +312,6 @@ const AI = () => {
     <Layout hideFooter>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[calc(100dvh-64px)] py-4 overflow-hidden">
         <div className="flex flex-col lg:flex-row items-stretch gap-6 h-full min-h-0">
-
           {/* ── Chat Workspace ── */}
           <div className="flex-1 flex flex-col gap-4 min-h-0 min-w-0 relative">
             <div className="absolute -top-20 -left-20 -right-20 h-40 bg-mira-purple/5 blur-[100px] pointer-events-none" />
@@ -265,7 +320,10 @@ const AI = () => {
                 <h1 className="text-lg font-bold tracking-tight text-foreground truncate max-w-[120px] sm:max-w-[300px]">
                   {session.title}
                 </h1>
-                <Select value={capability} onValueChange={(v: any) => setCapability(v)}>
+                <Select
+                  value={capability}
+                  onValueChange={(v: any) => setCapability(v)}
+                >
                   <SelectTrigger className="w-auto h-7 bg-muted border-none text-[10px] font-mono uppercase tracking-widest px-3 rounded-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -277,10 +335,20 @@ const AI = () => {
                 </Select>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={newChat} className="h-8 text-xs rounded-lg">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={newChat}
+                  className="h-8 text-xs rounded-lg"
+                >
                   <Plus className="size-4 mr-1.5" /> New Session
                 </Button>
-                <Button variant="ghost" size="sm" onClick={exportChat} className="h-8 text-xs rounded-lg">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={exportChat}
+                  className="h-8 text-xs rounded-lg"
+                >
                   <Download className="size-4 mr-1.5" /> Export
                 </Button>
               </div>
@@ -289,11 +357,18 @@ const AI = () => {
             <div className="bg-card border border-border rounded-[2.5rem] overflow-hidden flex flex-col flex-1 relative shadow-sm min-h-0">
               <TrafficLights label={`${model.name} // MIRA Interface`} />
 
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 sm:p-10 space-y-12 custom-scrollbar">
+              <div
+                ref={scrollRef}
+                className="flex-1 overflow-y-auto p-6 sm:p-10 space-y-12 custom-scrollbar"
+              >
                 {session.messages.length === 0 ? (
                   <EmptyState onPick={(p) => setInput(p)} />
                 ) : (
-                  session.messages.filter(m => m.content !== "" || m.role === "user").map((m) => <Message key={m.id} m={m} />)
+                  session.messages
+                    .filter(
+                      (m) => m.content !== "" || m.role === "user"
+                    )
+                    .map((m) => <Message key={m.id} m={m} />)
                 )}
                 {busy && (
                   <div className="flex flex-col items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -301,7 +376,9 @@ const AI = () => {
                       <div className="relative size-6">
                         <div className="absolute inset-0 rounded-full border-[3px] border-t-mira-purple border-r-mira-cyan border-b-mira-pink border-l-mira-blue animate-spin" />
                       </div>
-                      <span className="text-[10px] font-mono font-bold text-foreground/40 uppercase tracking-[0.4em]">MIRA Thinking</span>
+                      <span className="text-[10px] font-mono font-bold text-foreground/40 uppercase tracking-[0.4em]">
+                        MIRA Thinking
+                      </span>
                     </div>
                   </div>
                 )}
@@ -313,7 +390,11 @@ const AI = () => {
                     <textarea
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" &&
+                        !e.shiftKey &&
+                        (e.preventDefault(), send())
+                      }
                       placeholder="Ask MIRA anything..."
                       className="w-full bg-transparent px-6 py-4 text-base text-foreground outline-none min-h-[50px] max-h-[120px] resize-none placeholder:text-muted-foreground/60 font-light"
                       rows={1}
@@ -324,12 +405,24 @@ const AI = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {filteredModels.map((m) => (
-                            <SelectItem key={m.id} value={m.id} className="text-xs uppercase font-mono tracking-tighter">{m.name}</SelectItem>
+                          {displayModels.map((m) => (
+                            <SelectItem
+                              key={m.id}
+                              value={m.id}
+                              className="text-xs uppercase font-mono tracking-tighter"
+                            >
+                              {m.name}
+                              {m.badge ? ` · ${m.badge}` : ""}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      <Button onClick={send} disabled={busy || !input.trim()} size="icon" className="btn-mira size-9 rounded-xl">
+                      <Button
+                        onClick={send}
+                        disabled={busy || !input.trim()}
+                        size="icon"
+                        className="btn-mira size-9 rounded-xl"
+                      >
                         <Send className="size-4" />
                       </Button>
                     </div>
@@ -342,17 +435,18 @@ const AI = () => {
           {/* ── RIGHT SIDEBAR ── */}
           <div className="w-full lg:w-60 flex-col shrink-0 h-full min-h-0 hidden lg:flex">
             <div className="bg-card border border-border rounded-[2.5rem] p-6 flex flex-col gap-5 shadow-sm flex-1 min-h-0 overflow-y-auto custom-scrollbar">
-
               <div className="flex items-center justify-between">
                 <span className="text-[9px] font-mono uppercase tracking-[0.3em] text-muted-foreground/60 flex items-center gap-2 font-bold">
                   <Activity className="size-3 text-mira-purple" /> Telemetry
                 </span>
-                <span className={cn(
-                  "px-2 py-0.5 rounded-full text-[8px] font-mono uppercase tracking-widest border",
-                  busy
-                    ? "bg-mira-purple/10 text-mira-purple border-mira-purple/20"
-                    : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                )}>
+                <span
+                  className={cn(
+                    "px-2 py-0.5 rounded-full text-[8px] font-mono uppercase tracking-widest border",
+                    busy
+                      ? "bg-mira-purple/10 text-mira-purple border-mira-purple/20"
+                      : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                  )}
+                >
                   {busy ? "Active" : "Idle"}
                 </span>
               </div>
@@ -361,7 +455,9 @@ const AI = () => {
                 <div className="flex flex-col items-center justify-center py-8 border border-dashed border-border rounded-2xl gap-2 opacity-40">
                   <Info className="size-4" />
                   <span className="text-[9px] font-mono uppercase tracking-widest text-center leading-relaxed">
-                    Ask MIRA something<br />to see usage
+                    Ask MIRA something
+                    <br />
+                    to see usage
                   </span>
                 </div>
               ) : (
@@ -369,25 +465,35 @@ const AI = () => {
                   <div className="bg-muted/30 border border-border rounded-2xl px-4 py-3 space-y-0.5">
                     <div className="flex items-center gap-1.5">
                       <BarChart3 className="size-3 text-mira-purple" />
-                      <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/50 font-bold">Used</span>
+                      <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/50 font-bold">
+                        Used
+                      </span>
                     </div>
-                    <div className={cn(
-                      "text-xl font-bold tabular-nums tracking-tight transition-colors",
-                      busy ? "text-mira-purple" : "text-foreground"
-                    )}>
+                    <div
+                      className={cn(
+                        "text-xl font-bold tabular-nums tracking-tight transition-colors",
+                        busy ? "text-mira-purple" : "text-foreground"
+                      )}
+                    >
                       {usedTokens.toLocaleString()}
-                      <span className="text-[10px] font-mono text-muted-foreground/40 ml-1">tokens</span>
+                      <span className="text-[10px] font-mono text-muted-foreground/40 ml-1">
+                        tokens
+                      </span>
                     </div>
                   </div>
 
                   <div className="bg-muted/30 border border-border rounded-2xl px-4 py-3 space-y-0.5">
                     <div className="flex items-center gap-1.5">
                       <Hash className="size-3 text-emerald-500" />
-                      <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/50 font-bold">Remaining</span>
+                      <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/50 font-bold">
+                        Remaining
+                      </span>
                     </div>
                     <div className="text-xl font-bold tabular-nums tracking-tight text-foreground">
                       {remainingTokens.toLocaleString()}
-                      <span className="text-[10px] font-mono text-muted-foreground/40 ml-1">tokens</span>
+                      <span className="text-[10px] font-mono text-muted-foreground/40 ml-1">
+                        tokens
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -395,8 +501,12 @@ const AI = () => {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/40">Quota</span>
-                  <span className="text-[9px] font-mono text-muted-foreground/40">{usedPct.toFixed(2)}%</span>
+                  <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/40">
+                    Quota
+                  </span>
+                  <span className="text-[9px] font-mono text-muted-foreground/40">
+                    {usedPct.toFixed(2)}%
+                  </span>
                 </div>
                 <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                   <div
@@ -420,22 +530,23 @@ const AI = () => {
 
               <div className="mt-auto p-4 rounded-2xl bg-muted/20 border border-border space-y-1.5">
                 <div className="flex items-center gap-2 text-[9px] font-mono text-muted-foreground uppercase tracking-widest font-bold">
-                  <ShieldCheck className="size-3 text-emerald-500" /> Secure Vault
+                  <ShieldCheck className="size-3 text-emerald-500" /> Secure
+                  Vault
                 </div>
                 <p className="text-[9px] text-muted-foreground/40 leading-relaxed">
-                  Your conversations stay on your device. MIRA never stores your data remotely.
+                  Your conversations stay on your device. MIRA never stores your
+                  data remotely.
                 </p>
               </div>
-
             </div>
           </div>
-
         </div>
       </div>
     </Layout>
   );
 };
 
+// ── Glow letter effect ────────────────────────────────────────────────────────
 const GlowLetter = ({ letter }: { letter: string }) => (
   <span
     className="inline-block cursor-default"
@@ -461,12 +572,16 @@ const GlowLetter = ({ letter }: { letter: string }) => (
         neighbor.style.textShadow = `0 0 ${6 * intensity}px hsl(260 70% 65% / ${0.5 * intensity}), 0 0 ${16 * intensity}px hsl(255 60% 60% / ${0.3 * intensity})`;
         neighbor.style.transform = `translateY(${-1 * intensity}px) scale(${1 + 0.03 * intensity})`;
       };
-      applyNeighbor(-2, 0.3); applyNeighbor(-1, 0.6);
-      applyNeighbor(1, 0.6); applyNeighbor(2, 0.3);
+      applyNeighbor(-2, 0.3);
+      applyNeighbor(-1, 0.6);
+      applyNeighbor(1, 0.6);
+      applyNeighbor(2, 0.3);
     }}
     onMouseLeave={(e) => {
       const el = e.currentTarget;
-      el.style.color = ""; el.style.textShadow = ""; el.style.transform = "";
+      el.style.color = "";
+      el.style.textShadow = "";
+      el.style.transform = "";
       const parent = el.parentElement;
       if (!parent) return;
       const siblings = Array.from(parent.children) as HTMLElement[];
@@ -474,7 +589,9 @@ const GlowLetter = ({ letter }: { letter: string }) => (
       [-2, -1, 1, 2].forEach((offset) => {
         const neighbor = siblings[idx + offset];
         if (!neighbor) return;
-        neighbor.style.color = ""; neighbor.style.textShadow = ""; neighbor.style.transform = "";
+        neighbor.style.color = "";
+        neighbor.style.textShadow = "";
+        neighbor.style.transform = "";
       });
     }}
   >
@@ -482,11 +599,24 @@ const GlowLetter = ({ letter }: { letter: string }) => (
   </span>
 );
 
+// ── Empty state ───────────────────────────────────────────────────────────────
 const EmptyState = ({ onPick }: { onPick: (p: string) => void }) => {
   const samples = [
-    { title: "Code", desc: "Review and refactor my React component for performance.", sub: "Engineering" },
-    { title: "Research", desc: "Summarize the latest breakthroughs in multimodal AI.", sub: "Analysis" },
-    { title: "Reason", desc: "Compare llama-3 vs mixtral for long-context tasks.", sub: "Evaluation" },
+    {
+      title: "Code",
+      desc: "Review and refactor my React component for performance.",
+      sub: "Engineering",
+    },
+    {
+      title: "Research",
+      desc: "Summarize the latest breakthroughs in multimodal AI.",
+      sub: "Analysis",
+    },
+    {
+      title: "Reason",
+      desc: "Compare Gemini Flash vs Pro for long-context tasks.",
+      sub: "Evaluation",
+    },
   ];
   return (
     <div className="flex flex-col items-center justify-center min-h-full text-center py-10 px-4">
@@ -495,11 +625,13 @@ const EmptyState = ({ onPick }: { onPick: (p: string) => void }) => {
       </div>
 
       <h2 className="text-3xl font-bold tracking-tight text-foreground mb-4">
-        {"MIRA".split("").map((l, i) => <GlowLetter key={i} letter={l} />)}
+        {"MIRA".split("").map((l, i) => (
+          <GlowLetter key={i} letter={l} />
+        ))}
       </h2>
 
       <p className="text-muted-foreground/60 max-w-sm mb-2 text-sm font-light">
-        Your personal AI — powered by NVIDIA's frontier models.
+        Our personalized superfast AI to help you.
       </p>
       <p className="text-muted-foreground/40 max-w-sm mb-12 text-xs font-mono uppercase tracking-widest">
         Switch models · preserve context · think deeper
@@ -514,9 +646,15 @@ const EmptyState = ({ onPick }: { onPick: (p: string) => void }) => {
           >
             <div className="absolute inset-0 bg-gradient-to-br from-mira-purple/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative z-10">
-              <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-mira-purple mb-3 font-bold">{s.title}</div>
-              <div className="text-sm font-semibold text-foreground mb-2 group-hover:text-mira-purple transition-colors leading-snug">{s.desc}</div>
-              <div className="text-[10px] text-muted-foreground/60 font-medium">{s.sub}</div>
+              <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-mira-purple mb-3 font-bold">
+                {s.title}
+              </div>
+              <div className="text-sm font-semibold text-foreground mb-2 group-hover:text-mira-purple transition-colors leading-snug">
+                {s.desc}
+              </div>
+              <div className="text-[10px] text-muted-foreground/60 font-medium">
+                {s.sub}
+              </div>
             </div>
           </button>
         ))}
@@ -525,19 +663,49 @@ const EmptyState = ({ onPick }: { onPick: (p: string) => void }) => {
   );
 };
 
+// ── Message bubble ────────────────────────────────────────────────────────────
 const Message = ({ m }: { m: ChatMessage }) => (
-  <div className={cn("flex gap-6 min-w-0 max-w-full", m.role === "user" ? "flex-row-reverse" : "flex-row")}>
-    <div className={cn("size-9 rounded-xl shrink-0 flex items-center justify-center shadow-sm", m.role === "user" ? "bg-muted border border-border" : "bg-mira-purple text-white")}>
-      {m.role === "user" ? <UserIcon className="size-4" /> : <Sparkles className="size-4" />}
+  <div
+    className={cn(
+      "flex gap-6 min-w-0 max-w-full",
+      m.role === "user" ? "flex-row-reverse" : "flex-row"
+    )}
+  >
+    <div
+      className={cn(
+        "size-9 rounded-xl shrink-0 flex items-center justify-center shadow-sm",
+        m.role === "user"
+          ? "bg-muted border border-border"
+          : "bg-mira-purple text-white"
+      )}
+    >
+      {m.role === "user" ? (
+        <UserIcon className="size-4" />
+      ) : (
+        <Sparkles className="size-4" />
+      )}
     </div>
-    <div className={cn("flex-1 min-w-0 max-w-full space-y-2", m.role === "user" ? "text-right" : "text-left")}>
+    <div
+      className={cn(
+        "flex-1 min-w-0 max-w-full space-y-2",
+        m.role === "user" ? "text-right" : "text-left"
+      )}
+    >
       <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground/60 font-bold">
-        {m.role === "user" ? "You" : "MIRA"} // {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        {m.role === "user" ? "You" : "MIRA"} //{" "}
+        {new Date(m.createdAt).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
       </div>
-      <div className={cn(
-        "inline-block rounded-2xl px-6 py-4 max-w-full sm:max-w-[90%] text-left relative overflow-x-auto",
-        m.role === "user" ? "bg-muted/50 border border-border text-foreground" : "bg-transparent border-none p-0"
-      )}>
+      <div
+        className={cn(
+          "inline-block rounded-2xl px-6 py-4 max-w-full sm:max-w-[90%] text-left relative overflow-x-auto",
+          m.role === "user"
+            ? "bg-muted/50 border border-border text-foreground"
+            : "bg-transparent border-none p-0"
+        )}
+      >
         <div className="prose prose-sm dark:prose-invert max-w-full prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:text-mira-purple font-normal text-foreground overflow-wrap-anywhere dark:text-foreground/90">
           <ReactMarkdown>{m.content}</ReactMarkdown>
         </div>
@@ -546,13 +714,26 @@ const Message = ({ m }: { m: ChatMessage }) => (
   </div>
 );
 
-const MetaLine = ({ icon: Icon, label, value }: { icon: any; label: string; value: string }) => (
+// ── Sidebar meta line ─────────────────────────────────────────────────────────
+const MetaLine = ({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: any;
+  label: string;
+  value: string;
+}) => (
   <div className="flex justify-between items-center text-[10px] font-mono group">
     <div className="flex items-center gap-2">
       <Icon className="size-3 text-muted-foreground/40 group-hover:text-mira-purple transition-colors" />
-      <span className="text-muted-foreground/50 uppercase tracking-widest group-hover:text-muted-foreground/70 transition-colors font-bold">{label}</span>
+      <span className="text-muted-foreground/50 uppercase tracking-widest group-hover:text-muted-foreground/70 transition-colors font-bold">
+        {label}
+      </span>
     </div>
-    <span className="text-foreground/60 group-hover:text-mira-purple transition-colors">{value}</span>
+    <span className="text-foreground/60 group-hover:text-mira-purple transition-colors">
+      {value}
+    </span>
   </div>
 );
 

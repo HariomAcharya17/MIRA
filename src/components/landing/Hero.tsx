@@ -95,7 +95,7 @@ export const Hero = () => {
           <div className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-mira-purple/5 border border-mira-purple/20 mb-8">
             <Activity className="size-3 text-mira-purple animate-pulse" />
             <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-mira-purple font-bold">
-              Powered by NVIDIA · Multi-Model Active
+              Personalized Superfast AI · Active
             </span>
           </div>
 
@@ -188,7 +188,7 @@ export const Hero = () => {
                 </div>
               </div>
               <div className="h-10 px-6 flex items-center justify-between border-t border-border bg-muted/20 text-[10px] text-muted-foreground/40 font-mono uppercase tracking-widest">
-                <span>NVIDIA · NIM API</span>
+                <span>Personalized Superfast AI</span>
                 <span className="flex items-center gap-2">
                   <span className="size-1.5 bg-mira-purple rounded-full animate-pulse" />
                   Models Online · 3 active

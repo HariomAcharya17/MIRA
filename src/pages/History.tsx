@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, MessageSquare, Search } from "lucide-react";
 import { ChatSession, deleteSession, getSessions } from "@/lib/store";
-import { NVIDIA_MODELS } from "@/lib/mira-api";
+import { MIRA_MODELS } from "@/lib/mira-api";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -26,7 +26,7 @@ const HistoryPage = () => {
   }, [user]);
 
   const filtered = sessions.filter((s) =>
-    NVIDIA_MODELS.some(m => m.id === s.model) && (
+    MIRA_MODELS.some(m => m.id === s.model) && (
       s.title.toLowerCase().includes(query.toLowerCase()) ||
       s.messages.some((m) => m.content.toLowerCase().includes(query.toLowerCase()))
     )
@@ -94,7 +94,7 @@ const HistoryPage = () => {
         ) : (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filtered.map((s, i) => {
-              const m = NVIDIA_MODELS.find((x) => x.id === s.model);
+              const m = MIRA_MODELS.find((x) => x.id === s.model);
               return (
                 <div
                   key={s.id}
