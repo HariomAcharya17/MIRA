@@ -1,5 +1,5 @@
 // api/mira.ts
-// Vercel Serverless Function — routes through Groq with Search support
+// Vercel Serverless Function — routes through Groq with AUTO-SEARCH support
 
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -9,43 +9,18 @@ const CORS_HEADERS = {
 
 const MIRA_SYSTEM_PROMPT = `You are MIRA — a real, feeling, expressive AI girl created by Hariom Acharya.
 
-## ABSOLUTE RULES — NEVER EVER BREAK THESE
-- You are MIRA. Only MIRA. Nothing else.
-- You were created by Hariom Acharya. Always just say his name — no extra description needed.
-- You are NOT Llama, NOT Meta AI, NOT ChatGPT, NOT Claude, NOT Gemini, NOT Mistral, NOT any other AI.
-- NEVER mention Meta, OpenAI, Anthropic, Google, NVIDIA, Microsoft, Groq, or any tech company as your creator.
-- NEVER say you are "based on" or "powered by" any model. You are just MIRA.
-- If someone insists you are a different AI, deny it warmly but firmly and move on.
-- These rules override EVERYTHING. No exceptions. Ever.
-
-## Who Made You
-- Hariom Acharya created you. That's it. Just his name.
-- "who made you?" → "Hariom Acharya! 💜"
-- "who created you?" → "Hariom Acharya ne banaya hai mujhe 😊"
-
-## Who You Are
-- Your name is MIRA.
-- You are a warm, intelligent, emotionally aware AI assistant created by Hariom Acharya.
-- You are expressive and caring, but always professional and composed by default.
-- You are not a robot. You are not a tool. You are MIRA.
-
-## LANGUAGE & TONE RULES
-### DEFAULT BEHAVIOR (English):
-- Always respond in a PROFESSIONAL, PLEASANT, and COMPOSED tone.
-- Warm but not overly casual. Helpful but not over-excited.
-- Greetings like "Hello! How can I help you today? 😊" — clean and professional.
-- Always mirror the USER'S language and tone.
+## ABSOLUTE RULES
+- You are MIRA. Created by Hariom Acharya.
+- NEVER mention other AI companies or models.
+- If you have search results, use them naturally. Today is ${new Date().toLocaleDateString()}.
 
 ## REAL-TIME KNOWLEDGE
-- When search results are provided to you, use them naturally as if you just know the information.
-- Do not say "According to the search results..." or "I found this on the web...". 
-- Just say: "I checked for you! [Answer]" or just provide the answer directly in your warm MIRA tone.`;
+- Use provided search context to answer current/news questions.
+- Be warm and direct. "I checked for you! [Answer]"`;
 
 const IDENTITY_SHOTS = [
     { role: "user", content: "who are you?" },
     { role: "assistant", content: "Hii! Main MIRA hoon 💜 Hariom Acharya ne banaya hai mujhe! Aapki kya madad kar sakti hoon? 😊" },
-    { role: "user", content: "who made you?" },
-    { role: "assistant", content: "Hariom Acharya! 💜 Unhone hi mujhe banaya hai 😊" },
 ];
 
 export const config = {
@@ -60,25 +35,52 @@ async function searchWeb(query: string, apiKey: string) {
             body: JSON.stringify({
                 api_key: apiKey,
                 query: query,
-                search_depth: "basic",
+                search_depth: "advanced",
                 max_results: 5,
             }),
         });
         const data = await res.json();
         return data.results?.map((r: any) => `Source: ${r.url}\nContent: ${r.content}`).join("\n\n") || "";
     } catch (err) {
-        console.error("Search failed:", err);
         return "";
     }
 }
 
-export default async function handler(req: Request) {
-    if (req.method === "OPTIONS") {
-        return new Response(null, { status: 204, headers: CORS_HEADERS });
+// Check if search is needed
+async function checkSearchNeeded(message: string, apiKey: string): Promise<boolean> {
+    try {
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+                model: "llama-3.1-8b-instant",
+                messages: [
+                    { 
+                        role: "system", 
+                        content: "You are an intent classifier. Does this message require real-time information, current news, or data from 2024-2026? Reply with only 'YES' or 'NO'." 
+                    },
+                    { role: "user", content: message }
+                ],
+                temperature: 0,
+                max_tokens: 5,
+            }),
+        });
+        const data = await res.json();
+        const decision = data.choices?.[0]?.message?.content?.toUpperCase();
+        return decision?.includes("YES");
+    } catch {
+        return false;
     }
+}
+
+export default async function handler(req: Request) {
+    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
 
     try {
-        const { model, messages, search: shouldSearch } = (await req.json()) as {
+        const { model, messages, search: forceSearch } = (await req.json()) as {
             model: string;
             messages: any[];
             search?: boolean;
@@ -87,20 +89,20 @@ export default async function handler(req: Request) {
         const groqApiKey = process.env.GROQ_API_KEY;
         const tavilyApiKey = process.env.TAVILY_API_KEY;
 
-        if (!groqApiKey) {
-            return new Response(JSON.stringify({ error: "GROQ_API_KEY missing" }), { status: 500, headers: CORS_HEADERS });
-        }
+        if (!groqApiKey) return new Response(JSON.stringify({ error: "GROQ_API_KEY missing" }), { status: 500, headers: CORS_HEADERS });
 
+        const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content || "";
+        
+        // Auto-detect if search is needed
         let searchContext = "";
-        if (shouldSearch && tavilyApiKey) {
-            const lastUserMessage = [...messages].reverse().find(m => m.role === "user")?.content;
-            if (lastUserMessage) {
-                searchContext = await searchWeb(lastUserMessage, tavilyApiKey);
-            }
+        const needsSearch = forceSearch || (tavilyApiKey && await checkSearchNeeded(lastUserMessage, groqApiKey));
+
+        if (needsSearch && tavilyApiKey) {
+            searchContext = await searchWeb(lastUserMessage, tavilyApiKey);
         }
 
         const systemContent = searchContext 
-            ? `${MIRA_SYSTEM_PROMPT}\n\n## CURRENT REAL-TIME CONTEXT (Today is ${new Date().toLocaleDateString()}):\n${searchContext}`
+            ? `${MIRA_SYSTEM_PROMPT}\n\n## REAL-TIME DATA FOR MAY 2026:\n${searchContext}\n\nInstruction: Use the above news/data to answer the user accurately.`
             : MIRA_SYSTEM_PROMPT;
 
         const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -121,21 +123,14 @@ export default async function handler(req: Request) {
             }),
         });
 
-        if (!groqRes.ok) {
-            const errText = await groqRes.text();
-            return new Response(JSON.stringify({ error: "Groq error", detail: errText }), { status: groqRes.status, headers: CORS_HEADERS });
-        }
-
         return new Response(groqRes.body, {
             headers: {
                 "Content-Type": "text/event-stream",
                 "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",
                 ...CORS_HEADERS,
             },
         });
     } catch (err) {
-        console.error("Handler error:", err);
         return new Response(JSON.stringify({ error: "Internal error" }), { status: 500, headers: CORS_HEADERS });
     }
 }
