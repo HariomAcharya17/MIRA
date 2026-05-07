@@ -305,8 +305,8 @@ const AI = () => {
     toast.success("Session Exported");
   };
 
-  const usedTokens = user?.tokens_used ?? usage.totalTokens;
-  const QUOTA = user?.tokens_limit ?? 1_000_000;
+  const usedTokens = usage.totalTokens;
+  const QUOTA = 1_000_000;
   const remainingTokens = Math.max(QUOTA - usedTokens, 0);
   const usedPct = Math.min((usedTokens / QUOTA) * 100, 100);
 
@@ -452,110 +452,88 @@ const AI = () => {
             </div>
           </div>
 
-          {/* ── RIGHT SIDEBAR ── */}
-          <div className="w-full lg:w-60 flex-col shrink-0 h-full min-h-0 hidden lg:flex">
-            <div className="bg-card border border-border rounded-[2.5rem] p-6 flex flex-col gap-5 shadow-sm flex-1 min-h-0 overflow-y-auto custom-scrollbar">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono uppercase tracking-[0.3em] text-muted-foreground/60 flex items-center gap-2 font-bold">
-                  <Activity className="size-3 text-mira-purple" /> Telemetry
-                </span>
-                <span
-                  className={cn(
-                    "px-2 py-0.5 rounded-full text-[8px] font-mono uppercase tracking-widest border",
-                    busy
-                      ? "bg-mira-purple/10 text-mira-purple border-mira-purple/20"
-                      : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                  )}
-                >
-                  {busy ? "Active" : "Idle"}
+          {/* COLORFUL TELEMETRY SIDEBAR */}
+          <div className="w-full lg:w-[320px] shrink-0 min-h-0 flex flex-col">
+            <div className="glass-panel p-8 rounded-[2.5rem] flex flex-col gap-8 flex-1 border-white/5 bg-white/[0.01]">
+              <div className="flex items-center gap-3 px-2">
+                <div className="size-2 bg-mira-purple rounded-full animate-ping" />
+                <span className="text-[11px] font-mono uppercase tracking-[0.4em] text-muted-foreground/60 font-bold">
+                  Telemetry Core
                 </span>
               </div>
 
-              {usedTokens === 0 && !busy ? (
-                <div className="flex flex-col items-center justify-center py-8 border border-dashed border-border rounded-2xl gap-2 opacity-40">
-                  <Info className="size-4" />
-                  <span className="text-[9px] font-mono uppercase tracking-widest text-center leading-relaxed">
-                    Ask MIRA something
-                    <br />
-                    to see usage
-                  </span>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <div className="bg-muted/30 border border-border rounded-2xl px-4 py-3 space-y-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <BarChart3 className="size-3 text-mira-purple" />
-                      <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/50 font-bold">
-                        Used
-                      </span>
-                    </div>
-                    <div
-                      className={cn(
-                        "text-xl font-bold tabular-nums tracking-tight transition-colors",
-                        busy ? "text-mira-purple" : "text-foreground"
-                      )}
-                    >
-                      {usedTokens.toLocaleString()}
-                      <span className="text-[10px] font-mono text-muted-foreground/40 ml-1">
-                        tokens
-                      </span>
-                    </div>
+              <div className="grid grid-cols-1 gap-4">
+                {/* USED TOKENS - VIBRANT CYAN/BLUE */}
+                <div className="relative group overflow-hidden bg-gradient-to-br from-mira-cyan/20 to-mira-blue/20 border border-mira-cyan/20 rounded-2xl p-5 transition-all duration-500 hover:scale-[1.02] shadow-sm">
+                  <div className="absolute -right-4 -top-4 size-24 bg-mira-cyan/10 blur-2xl rounded-full" />
+                  <div className="flex items-center gap-2 mb-3">
+                    <Activity className="size-3.5 text-mira-cyan" />
+                    <span className="text-[9px] font-mono uppercase tracking-widest text-mira-cyan font-bold">
+                      Neural Used
+                    </span>
                   </div>
-
-                  <div className="bg-muted/30 border border-border rounded-2xl px-4 py-3 space-y-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <Hash className="size-3 text-emerald-500" />
-                      <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/50 font-bold">
-                        Remaining
-                      </span>
-                    </div>
-                    <div className="text-xl font-bold tabular-nums tracking-tight text-foreground">
-                      {remainingTokens.toLocaleString()}
-                      <span className="text-[10px] font-mono text-muted-foreground/40 ml-1">
-                        tokens
-                      </span>
-                    </div>
+                  <div className="text-2xl font-bold tabular-nums tracking-tighter text-white drop-shadow-sm">
+                    {usedTokens.toLocaleString()}
+                    <span className="text-[10px] font-mono text-white/30 ml-1.5 uppercase">
+                      tokens
+                    </span>
                   </div>
                 </div>
-              )}
 
-              <div className="space-y-2">
+                {/* REMAINING - VIBRANT PINK/PURPLE */}
+                <div className="relative group overflow-hidden bg-gradient-to-br from-mira-pink/20 to-mira-purple/20 border border-mira-pink/20 rounded-2xl p-5 transition-all duration-500 hover:scale-[1.02] shadow-sm">
+                  <div className="absolute -right-4 -top-4 size-24 bg-mira-pink/10 blur-2xl rounded-full" />
+                  <div className="flex items-center gap-2 mb-3">
+                    <Zap className="size-3.5 text-mira-pink" />
+                    <span className="text-[9px] font-mono uppercase tracking-widest text-mira-pink font-bold">
+                      Available
+                    </span>
+                  </div>
+                  <div className="text-2xl font-bold tabular-nums tracking-tighter text-white drop-shadow-sm">
+                    {remainingTokens.toLocaleString()}
+                    <span className="text-[10px] font-mono text-white/30 ml-1.5 uppercase">
+                      tokens
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 px-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/40">
-                    Quota
+                  <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/40 font-bold">
+                    System Load
                   </span>
-                  <span className="text-[9px] font-mono text-muted-foreground/40">
+                  <span className="text-[9px] font-mono text-mira-purple font-bold">
                     {usedPct.toFixed(2)}%
                   </span>
                 </div>
-                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden p-[1px] border border-white/5">
                   <div
-                    className="h-full bg-mira-purple rounded-full transition-all duration-700 ease-out shadow-[0_0_8px_rgba(168,85,247,0.5)]"
+                    className="h-full bg-gradient-to-r from-mira-blue via-mira-purple to-mira-pink rounded-full transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(168,85,247,0.5)]"
                     style={{ width: `${usedPct}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-[8px] font-mono text-muted-foreground/30">
-                  <span>0</span>
-                  <span>{QUOTA.toLocaleString()}</span>
+                <div className="flex justify-between text-[8px] font-mono text-muted-foreground/30 font-bold uppercase tracking-widest">
+                  <span>Zero</span>
+                  <span>{QUOTA.toLocaleString()} Max</span>
                 </div>
               </div>
 
-              <div className="h-px bg-border" />
+              <div className="h-px bg-white/5" />
 
-              <div className="space-y-3">
-                <MetaLine icon={ShieldCheck} label="Identity" value="Secured" />
-                <MetaLine icon={Hash} label="Protocol" value="Verified" />
-                <MetaLine icon={Lock} label="Storage" value="Cloud Sync" />
+              <div className="space-y-3 px-2">
+                <MetaLine icon={ShieldCheck} label="Identity" value="Secured" color="text-emerald-500" />
+                <MetaLine icon={Hash} label="Protocol" value="Quantum" color="text-mira-cyan" />
+                <MetaLine icon={Lock} label="Storage" value="AES-256" color="text-mira-pink" />
               </div>
 
-              <div className="mt-auto p-4 rounded-2xl bg-muted/20 border border-border space-y-1.5">
-                <div className="flex items-center gap-2 text-[9px] font-mono text-muted-foreground uppercase tracking-widest font-bold">
-                  <ShieldCheck className="size-3 text-emerald-500" /> Secure
-                  Vault
+              <div className="mt-auto p-5 rounded-2xl bg-gradient-to-b from-white/[0.03] to-transparent border border-white/5 space-y-2">
+                <div className="flex items-center gap-2 text-[9px] font-mono text-mira-purple uppercase tracking-[0.2em] font-black">
+                  <ShieldCheck className="size-3 text-emerald-500 shadow-emerald-500/50" /> 
+                  Privacy Shield
                 </div>
-                <p className="text-[9px] text-muted-foreground/40 leading-relaxed">
-                  Your conversations stay on your device. MIRA never stores your
-                  data remotely.
+                <p className="text-[9px] text-muted-foreground/50 leading-relaxed font-medium">
+                  Your neural sessions are localized and encrypted. MIRA ensures zero remote data retention.
                 </p>
               </div>
             </div>
@@ -735,23 +713,15 @@ const Message = ({ m }: { m: ChatMessage }) => (
 );
 
 // ── Sidebar meta line ─────────────────────────────────────────────────────────
-const MetaLine = ({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: any;
-  label: string;
-  value: string;
-}) => (
+const MetaLine = ({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color?: string }) => (
   <div className="flex justify-between items-center text-[10px] font-mono group">
     <div className="flex items-center gap-2">
-      <Icon className="size-3 text-muted-foreground/40 group-hover:text-mira-purple transition-colors" />
+      <Icon className={cn("size-3 text-muted-foreground/40 transition-colors", color)} />
       <span className="text-muted-foreground/50 uppercase tracking-widest group-hover:text-muted-foreground/70 transition-colors font-bold">
         {label}
       </span>
     </div>
-    <span className="text-foreground/60 group-hover:text-mira-purple transition-colors">
+    <span className="text-foreground/80 font-bold tracking-tight">
       {value}
     </span>
   </div>

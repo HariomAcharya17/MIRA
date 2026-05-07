@@ -100,7 +100,7 @@ export const getUsage = (): UsageStats => {
   return { totalTokens: 0, promptTokens: 0, completionTokens: 0, requests: 0, byModel: {}, history: [] };
 };
 
-export const recordUsage = async (model: string, promptTokens: number, completionTokens: number) => {
+export const recordUsage = (model: string, promptTokens: number, completionTokens: number) => {
   const usage = getUsage();
   const total = promptTokens + completionTokens;
   usage.totalTokens += total;
@@ -116,12 +116,6 @@ export const recordUsage = async (model: string, promptTokens: number, completio
   else usage.history.push({ date: today, tokens: total });
   if (usage.history.length > 14) usage.history = usage.history.slice(-14);
   localStorage.setItem(key(KEY_USAGE), JSON.stringify(usage));
-
-  // Sync with Supabase
-  const uid = getUserId();
-  if (uid && total > 0) {
-    await supabase.rpc('increment_tokens', { user_id: uid, amount: total });
-  }
 };
 
 // ── FILE DOWNLOAD ─────────────────────────────────────────────────────────────
