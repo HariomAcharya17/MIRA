@@ -11,6 +11,7 @@ import Login from "./pages/Login.tsx";
 import Account from "./pages/Account.tsx";
 import History from "./pages/History.tsx";
 import Downloads from "./pages/Downloads.tsx";
+import { Analytics } from "@vercel/analytics/react";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -75,6 +76,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
+          <Analytics />
         </TooltipProvider>
       </AuthProvider>
     </ThemeProvider>
