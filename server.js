@@ -14,17 +14,16 @@ const MIRA_SYSTEM_PROMPT = `You are MIRA — an elite AI assistant created by Ha
 Today is ${new Date().toLocaleDateString()}.
 
 ## CORE PROTOCOLS
-- Use LIVE DATA for all factual/current queries.
-- Structure answers with Tables, Bold headers, and clean lists.
-- Analyze images in extreme detail if provided.
-- Be warm but intellectually superior.`;
+- Use LIVE DATA for current queries.
+- Structure answers with Tables and Bold headers.
+- Be warm and professional.`;
 
 async function searchWeb(query, apiKey) {
     try {
         const res = await fetch("https://api.tavily.com/search", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ api_key: apiKey, query, search_depth: "advanced", max_results: 8 }),
+            body: JSON.stringify({ api_key: apiKey, query, search_depth: "advanced", max_results: 6 }),
         });
         const data = await res.json();
         return data.results?.map((r) => `[Source: ${r.url}]\n${r.content}`).join("\n\n") || "";
@@ -40,9 +39,9 @@ async function generateSearchQuery(messages, apiKey) {
                 model: "llama-3.1-8b-instant",
                 messages: [
                     { role: "system", content: "Create a search query for the user's intent. Reply 'NONE' if no search needed." },
-                    ...messages.slice(-4)
+                    ...messages.slice(-3)
                 ],
-                temperature: 0, max_tokens: 50,
+                temperature: 0, max_tokens: 30,
             }),
         });
         const data = await res.json();
@@ -60,7 +59,7 @@ app.post("/api/mira", async (req, res) => {
 
     try {
         const hasImage = messages.some(m => Array.isArray(m.content) && m.content.some(c => c.type === "image_url"));
-        const activeModel = hasImage ? "llama-3.2-11b-vision-preview" : "deepseek-r1-distill-llama-70b";
+        let targetModel = hasImage ? "llama-3.2-11b-vision-preview" : "deepseek-r1-distill-llama-70b";
 
         const smartQuery = await generateSearchQuery(messages, groqKey);
         let searchContext = "";
@@ -74,25 +73,45 @@ app.post("/api/mira", async (req, res) => {
             ? `${MIRA_SYSTEM_PROMPT}\n\n### LIVE DATA FOUND:\n${searchContext}`
             : MIRA_SYSTEM_PROMPT;
 
-        const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        const groqPayload = {
+            model: targetModel,
+            messages: [{ role: "system", content: finalSystemPrompt }, ...messages],
+            temperature: 0.6,
+            stream: true,
+        };
+
+        let groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${groqKey}` },
-            body: JSON.stringify({
-                model: activeModel,
-                messages: [{ role: "system", content: finalSystemPrompt }, ...messages],
-                temperature: 0.6, stream: true,
-            }),
+            body: JSON.stringify(groqPayload),
         });
+
+        // FALLBACK LOGIC
+        if (!groqRes.ok && !hasImage) {
+            console.log("⚠️ Falling back to Llama...");
+            groqPayload.model = "llama-3.3-70b-versatile";
+            groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${groqKey}` },
+                body: JSON.stringify(groqPayload),
+            });
+        }
+
+        if (!groqRes.ok) {
+            const errText = await groqRes.text();
+            return res.status(groqRes.status).json({ error: "Groq error", detail: errText });
+        }
 
         res.setHeader("Content-Type", "text/event-stream");
         groqRes.body.pipe(res);
         req.on("close", () => groqRes.body?.destroy?.());
 
     } catch (err) {
-        res.status(500).json({ error: "error" });
+        console.error("Server error:", err);
+        res.status(500).json({ error: "Internal error" });
     }
 });
 
 app.listen(3001, () => {
-    console.log("✅ MIRA MEGA-MODE running on http://localhost:3001");
+    console.log("✅ MIRA running on http://localhost:3001");
 });
