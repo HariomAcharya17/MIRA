@@ -93,6 +93,9 @@ const AI = () => {
   const [busy, setBusy] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
 
+  const [liveQuota, setLiveQuota] = useState(100_000);
+  const [liveRemaining, setLiveRemaining] = useState<number | null>(null);
+
   const [usage, setUsage] = useState(() =>
     user
       ? getUsage()
@@ -206,6 +209,12 @@ const AI = () => {
         }),
       });
 
+      // UPDATE LIVE QUOTA DATA FROM GROQ HEADERS
+      const hLimit = response.headers.get("x-mira-limit-tokens");
+      const hRemaining = response.headers.get("x-mira-remaining-tokens");
+      if (hLimit) setLiveQuota(parseInt(hLimit));
+      if (hRemaining) setLiveRemaining(parseInt(hRemaining));
+
       if (!response.ok) {
         const errText = await response.text();
         throw new Error(`API error ${response.status}: ${errText}`);
@@ -305,9 +314,9 @@ const AI = () => {
     toast.success("Session Exported");
   };
 
-  const usedTokens = usage.totalTokens;
-  const QUOTA = 1_000_000;
-  const remainingTokens = Math.max(QUOTA - usedTokens, 0);
+  const QUOTA = liveQuota;
+  const remainingTokens = liveRemaining !== null ? liveRemaining : Math.max(QUOTA - usage.totalTokens, 0);
+  const usedTokens = QUOTA - remainingTokens;
   const usedPct = Math.min((usedTokens / QUOTA) * 100, 100);
 
   return (

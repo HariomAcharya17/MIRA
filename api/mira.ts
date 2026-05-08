@@ -238,7 +238,11 @@ ${searchContext}`
             const errText = await groqRes.text();
             return new Response(JSON.stringify({ error: "Groq error", detail: errText }), {
                 status: groqRes.status,
-                headers: CORS_HEADERS,
+                headers: {
+                    ...CORS_HEADERS,
+                    "x-mira-limit-tokens": groqRes.headers.get("x-ratelimit-limit-tokens") || "",
+                    "x-mira-remaining-tokens": groqRes.headers.get("x-ratelimit-remaining-tokens") || "",
+                },
             });
         }
 
@@ -247,6 +251,8 @@ ${searchContext}`
                 "Content-Type": "text/event-stream",
                 "Cache-Control": "no-cache",
                 "X-Accel-Buffering": "no",
+                "x-mira-limit-tokens": groqRes.headers.get("x-ratelimit-limit-tokens") || "",
+                "x-mira-remaining-tokens": groqRes.headers.get("x-ratelimit-remaining-tokens") || "",
                 ...CORS_HEADERS,
             },
         });
