@@ -93,8 +93,21 @@ const AI = () => {
   const [busy, setBusy] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
 
-  const [liveQuota, setLiveQuota] = useState(100_000);
-  const [liveRemaining, setLiveRemaining] = useState<number | null>(null);
+  const [liveQuota, setLiveQuota] = useState(() => {
+    const saved = localStorage.getItem("mira-live-quota");
+    return saved ? parseInt(saved) : 100_000;
+  });
+  const [liveRemaining, setLiveRemaining] = useState<number | null>(() => {
+    const saved = localStorage.getItem("mira-live-remaining");
+    return saved ? parseInt(saved) : null;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("mira-live-quota", liveQuota.toString());
+    if (liveRemaining !== null) {
+      localStorage.setItem("mira-live-remaining", liveRemaining.toString());
+    }
+  }, [liveQuota, liveRemaining]);
 
   const [usage, setUsage] = useState(() =>
     user
