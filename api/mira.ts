@@ -55,7 +55,7 @@ export default async function handler(req: Request) {
             },
             contents: contents,
             tools: [
-                { google_search_retrieval: { dynamic_retrieval_config: { mode: "DYNAMIC", dynamic_threshold: 0.3 } } }
+                { google_search_retrieval: {} }
             ],
             generationConfig: {
                 temperature: 0.7,
