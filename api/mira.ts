@@ -71,8 +71,7 @@ async function searchWeb(query: string, apiKey: string) {
 
 // Hard-coded block list — these NEVER go to search, ever
 const IDENTITY_BLOCK_KEYWORDS = [
-    "hariom", "acharya", "creator", "who made you", "who built you",
-    "who created you", "who are you", "what are you", "your name", "mira",
+    "who made you", "who built you", "who created you", "who are you", "what are you",
     "are you an ai", "are you chatgpt", "are you claude", "are you gemini",
     "are you an llm", "are you a bot", "aapko kisne", "tumhe kisne",
     "your developer", "your owner", "who designed you", "who is behind you",
@@ -98,7 +97,7 @@ async function generateSearchQuery(messages: any[], apiKey: string): Promise<str
             body: JSON.stringify({
                 model: "llama-3.1-8b-instant",
                 messages: [
-                    { role: "system", content: "You generate a web search query based on the user's latest message. If no search is needed (e.g. greetings, opinions, coding help, math, personal questions about the assistant), reply with exactly: NONE" },
+                    { role: "system", content: "You are a search query generator. Determine if the user's request requires real-time information (sports scores, current events, news, weather, etc.). If yes, output a concise search query. If it is a greeting, general knowledge, or coding task, output exactly: NONE." },
                     ...messages.slice(-3)
                 ],
                 temperature: 0, max_tokens: 30,
@@ -114,7 +113,7 @@ export default async function handler(req: Request) {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
 
     try {
-        const { model, messages } = (await req.json()) as { model: string; messages: any[] };
+        const { model, messages, search } = (await req.json()) as { model: string; messages: any[]; search?: boolean };
         const groqKey = process.env.GROQ_API_KEY;
         const tavilyKey = process.env.TAVILY_API_KEY;
 
@@ -126,13 +125,16 @@ export default async function handler(req: Request) {
         let targetModel = hasImage ? "llama-3.2-11b-vision-preview" : "deepseek-r1-distill-llama-70b";
 
         let searchContext = "";
-        const smartQuery = await generateSearchQuery(messages, groqKey);
-        if (smartQuery && tavilyKey) {
-            searchContext = await searchWeb(smartQuery, tavilyKey);
+        // Only search if explicitly enabled
+        if (search && tavilyKey) {
+            const smartQuery = await generateSearchQuery(messages, groqKey);
+            if (smartQuery) {
+                searchContext = await searchWeb(smartQuery, tavilyKey);
+            }
         }
 
         const finalSystemPrompt = searchContext
-            ? `${MIRA_SYSTEM_PROMPT}\n\n### LIVE DATA FOUND:\n${searchContext}`
+            ? `${MIRA_SYSTEM_PROMPT}\n\n### CRITICAL: LIVE WEB DATA FOUND (Current Date: ${new Date().toLocaleDateString()})\nUse the following information to answer the user's request. Prioritize this data over your training knowledge for current events, scores, or news.\n\n${searchContext}`
             : MIRA_SYSTEM_PROMPT;
 
         const groqPayload = {
