@@ -48,9 +48,8 @@ const AI = () => {
   const navigate = useNavigate();
   const abortRef = useRef<AbortController | null>(null);
 
-  const [capability, setCapability] = useState<"text" | "code" | "speech">(
-    "text"
-  );
+  // Removed capability selector state as requested
+  const capability = "text";
 
   const filteredModels = useMemo(() => {
     return MIRA_MODELS.filter((m) => {
@@ -74,7 +73,7 @@ const AI = () => {
     if (displayModels.length > 0 && !displayModels.find((m) => m.id === modelId)) {
       setModelId(displayModels[0].id);
     }
-  }, [capability, displayModels, modelId]);
+  }, [displayModels, modelId]);
 
   const model = useMemo(
     () => MIRA_MODELS.find((m) => m.id === modelId) || MIRA_MODELS[0],
@@ -323,19 +322,11 @@ const AI = () => {
                 <h1 className="text-lg font-bold tracking-tight text-foreground truncate max-w-[120px] sm:max-w-[300px]">
                   {session.title}
                 </h1>
-                <Select
-                  value={capability}
-                  onValueChange={(v: any) => setCapability(v)}
-                >
-                  <SelectTrigger className="w-auto h-7 bg-muted border-none text-[10px] font-mono uppercase tracking-widest px-3 rounded-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="text">Logic Core</SelectItem>
-                    <SelectItem value="code">Code Engine</SelectItem>
-                    <SelectItem value="speech">Audio</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="h-7 bg-muted/50 px-4 flex items-center rounded-full">
+                  <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-mira-purple font-bold">
+                    Neural Workspace
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -455,10 +446,10 @@ const AI = () => {
 
           {/* COLORFUL TELEMETRY SIDEBAR */}
           <div className="w-full lg:w-[320px] shrink-0 min-h-0 flex flex-col">
-            <div className="glass-panel p-8 rounded-[2.5rem] flex flex-col gap-8 flex-1 border-white/5 bg-white/[0.01]">
+            <div className="glass-panel p-8 rounded-[2.5rem] flex flex-col gap-8 flex-1 border-border/40 dark:border-white/5 bg-card/10 dark:bg-white/[0.01]">
               <div className="flex items-center gap-3 px-2">
                 <div className="size-2 bg-mira-purple rounded-full animate-ping" />
-                <span className="text-[11px] font-mono uppercase tracking-[0.4em] text-muted-foreground/60 font-bold">
+                <span className="text-[11px] font-mono uppercase tracking-[0.4em] text-foreground dark:text-muted-foreground/60 font-bold">
                   Telemetry Core
                 </span>
               </div>
@@ -473,9 +464,9 @@ const AI = () => {
                       Neural Used
                     </span>
                   </div>
-                  <div className="text-2xl font-bold tabular-nums tracking-tighter text-white drop-shadow-sm">
+                  <div className="text-2xl font-bold tabular-nums tracking-tighter text-foreground dark:text-white drop-shadow-sm">
                     {usedTokens.toLocaleString()}
-                    <span className="text-[10px] font-mono text-white/30 ml-1.5 uppercase">
+                    <span className="text-[10px] font-mono text-muted-foreground dark:text-white/30 ml-1.5 uppercase">
                       tokens
                     </span>
                   </div>
@@ -490,9 +481,9 @@ const AI = () => {
                       Available
                     </span>
                   </div>
-                  <div className="text-2xl font-bold tabular-nums tracking-tighter text-white drop-shadow-sm">
+                  <div className="text-2xl font-bold tabular-nums tracking-tighter text-foreground dark:text-white drop-shadow-sm">
                     {remainingTokens.toLocaleString()}
-                    <span className="text-[10px] font-mono text-white/30 ml-1.5 uppercase">
+                    <span className="text-[10px] font-mono text-muted-foreground dark:text-white/30 ml-1.5 uppercase">
                       tokens
                     </span>
                   </div>

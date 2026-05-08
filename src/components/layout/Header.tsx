@@ -59,14 +59,14 @@ export const Header = () => {
           </Link>
           <nav className="hidden lg:flex items-center gap-7">
             {navItems.map((item) => (
-              <a
+              <Link
                 key={item.to}
-                href={item.to}
+                to={item.to}
                 onClick={(e) => handleAnchor(e, item.to)}
-                className="text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors uppercase tracking-wide"
+                className="text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors uppercase tracking-wide cursor-pointer"
               >
                 {item.label}
-              </a>
+              </Link>
             ))}
           </nav>
         </div>
@@ -114,14 +114,14 @@ export const Header = () => {
         <div className="lg:hidden border-t border-border/40 bg-background/95 backdrop-blur-xl animate-fade-in">
           <nav className="px-4 py-4 flex flex-col gap-1">
             {navItems.map((item) => (
-              <a
+              <Link
                 key={item.to}
-                href={item.to}
+                to={item.to}
                 onClick={(e) => handleAnchor(e, item.to)}
                 className="px-3 py-2.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               >
                 {item.label}
-              </a>
+              </Link>
             ))}
             <div className="h-px bg-border my-2" />
             <Link to="/ai" onClick={() => setOpen(false)} className="px-3 py-2.5 rounded-md text-sm font-medium hover:bg-muted flex items-center gap-2">

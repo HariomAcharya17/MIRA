@@ -102,7 +102,7 @@ export const Hero = () => {
           <InteractiveTitle text="One AI to access every model" />
 
           <p className="text-xl sm:text-2xl text-muted-foreground/60 font-light leading-relaxed max-w-[36ch]">
-            <h1 className="text-mira-purple">MIRA</h1> unifies the world's most powerful AI models into a single personal interface. Switch models, preserve context, think deeper.
+            <span className="text-mira-purple font-bold text-3xl sm:text-4xl block mb-2">MIRA</span> unifies the world's most powerful AI models into a single personal interface. Switch models, preserve context, think deeper.
           </p>
         </motion.div>
 
@@ -172,9 +172,10 @@ export const Hero = () => {
                   <div className="space-y-4">
                     <p className="text-foreground/80">For deep reasoning, I recommend routing to one of these:</p>
                     <div className="space-y-3">
-                      <Row color="bg-mira-purple" text="llama-3.1-405b · best for logic & code" />
-                      <Row color="bg-mira-cyan" text="mixtral-8x22b · best for research synthesis" />
-                      <Row color="bg-emerald-500" text="gemma-2-27b · best for fast Q&A" />
+                      <Row color="bg-mira-purple" text="Llama 3.3 70B · Meta's best versatile model" />
+                      <Row color="bg-mira-cyan" text="Llama 3.1 8B · Instant responses" />
+                      <Row color="bg-emerald-500" text="Llama 4 Scout 17B · Latest reasoning core" />
+                      <Row color="bg-orange-500" text="GPT OSS 120B · Massive scale logic" />
                     </div>
                     <div className="p-5 rounded-2xl bg-muted/30 border border-border backdrop-blur-sm">
                       <div className="text-[10px] text-mira-purple uppercase tracking-widest font-bold mb-2">MIRA Recommendation</div>

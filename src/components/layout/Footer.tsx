@@ -27,7 +27,7 @@ export const Footer = () => (
         <div className="w-full flex flex-col sm:flex-row justify-between items-center pt-10 border-t border-border/40 gap-6 opacity-60">
           <div className="flex items-center gap-2">
             <div className="size-2 rounded-full bg-gradient-mira shadow-[0_0_8px_hsl(var(--mira-purple))]" />
-            <span className="font-bold tracking-[0.2em] text-[10px] uppercase">Mira Nexus Core</span>
+            <span className="font-bold tracking-[0.2em] text-[10px] uppercase">MIRA Interface</span>
           </div>
           
           <div className="text-[10px] font-mono uppercase tracking-[0.4em] text-muted-foreground font-medium">
@@ -35,7 +35,7 @@ export const Footer = () => (
           </div>
           
           <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
-            v1.0.0 // STRATOSPHERIC
+            Production Release
           </div>
         </div>
       </div>
