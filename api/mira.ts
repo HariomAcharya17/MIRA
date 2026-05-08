@@ -110,7 +110,7 @@ export default async function handler(req: Request) {
         // Selection logic: Vision models for images, otherwise respect user choice or default to powerhouse
         let targetModel = hasImage 
             ? "llama-3.2-11b-vision-preview" 
-            : (requestedModel && requestedModel.includes("llama") || requestedModel.includes("deepseek") ? requestedModel : "deepseek-r1-distill-llama-70b");
+            : (requestedModel && (requestedModel.includes("llama") || requestedModel.includes("deepseek")) ? requestedModel : "deepseek-r1-distill-llama-70b");
 
         let searchContext = "";
         // Only search if explicitly enabled
