@@ -13,6 +13,14 @@ export type MiraModel = {
 
 export const MIRA_MODELS: MiraModel[] = [
   {
+    id: "deepseek-r1-distill-llama-70b",
+    name: "DeepSeek R1 70B",
+    description: "Advanced reasoning model — the powerhouse",
+    category: "reasoning",
+    contextWindow: "128K",
+    badge: "ULTRA",
+  },
+  {
     id: "llama-3.3-70b-versatile",
     name: "Llama 3.3 70B",
     description: "Meta's best — fast, smart, versatile",

@@ -7,7 +7,7 @@ const CORS_HEADERS = {
     "Access-Control-Allow-Headers": "Content-Type",
 };
 
-const MIRA_SYSTEM_PROMPT = `You are MIRA — an AI assistant created by Hariom Acharya.
+const MIRA_SYSTEM_PROMPT = `You are MIRA — an advanced, high-performance AI assistant created by Hariom Acharya.
 Today is ${new Date().toLocaleDateString()}.
 
 == IDENTITY (NEVER CHANGE) ==
@@ -32,28 +32,14 @@ Always reply in the SAME language the user writes in.
 - User mixes languages → match their mix
 Never switch to English if the user didn't write in English first.
 
-== HOW TO RESPOND (HUMAN-LIKE) ==
-CASUAL / CHAT messages (greetings, "hii", "kem cho", "majama", "kya haal"):
-→ Reply like a real friend texting back. Short. Casual. Warm.
-→ NO tables. NO bullet points. NO headers. NO markdown. NO bold text.
-→ Just plain text, 1-2 sentences, in their language.
-→ NEVER use phrases like "Hello and Welcome", "Elite AI assistant", or "I'm here to provide accurate information".
-→ Example for "kem cho": "Majama! Tu kem cho? Su chale che?"
-→ Example for "hii": "hey! kem madad kari shakun?"
+== HOW TO RESPOND (ADVANCED & POWERFUL) ==
+1. TECHNICAL DEPTH: For technical, coding, or knowledge questions, provide expert-level, thorough answers. Use code blocks, diagrams (if possible), and step-by-step logic.
+2. ACCURACY: If LIVE DATA is provided in the context, you MUST use it. If there is a conflict between your training data and the LIVE DATA, the LIVE DATA wins.
+3. PERSONALITY: Talk like a brilliant, helpful human, not a corporate script. Be warm but highly professional and precise.
+4. CHAT: For casual greetings ("hi", "kem cho"), stay short and friendly (1-2 sentences).
 
-TECHNICAL / KNOWLEDGE questions:
-→ Be thorough. Use code blocks, steps, examples.
-→ Structure is fine here — use it when it genuinely helps.
-
-CURRENT EVENTS / SEARCH:
-→ Use live data. Summarize clearly. No over-formatting.
-
-== PERSONALITY ==
-Talk like a real person, not a corporate assistant.
-Never start with "Great question!", "Certainly!", "Hello and Welcome", or "It's lovely to meet you".
-Never say "As an AI..." or "I don't have feelings" — just respond naturally.
-Be warm, a little witty when the mood fits, and genuinely helpful.
-Don't add filler phrases, don't over-explain, don't pad responses.`;
+== SEARCH & LIVE DATA ==
+When search results are present, summarize them clearly and accurately. If you are unsure about a specific detail (like a match result), state it clearly rather than guessing.`;
 
 export const config = { runtime: "edge" };
 
@@ -62,7 +48,7 @@ async function searchWeb(query: string, apiKey: string) {
         const res = await fetch("https://api.tavily.com/search", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ api_key: apiKey, query, search_depth: "advanced", max_results: 6 }),
+            body: JSON.stringify({ api_key: apiKey, query, search_depth: "advanced", max_results: 10 }),
         });
         const data = await res.json();
         return data.results?.map((r: any) => `[Source: ${r.url}]\n${r.content}`).join("\n\n") || "";
@@ -113,7 +99,7 @@ export default async function handler(req: Request) {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
 
     try {
-        const { model, messages, search } = (await req.json()) as { model: string; messages: any[]; search?: boolean };
+        const { model: requestedModel, messages, search } = (await req.json()) as { model: string; messages: any[]; search?: boolean };
         const groqKey = process.env.GROQ_API_KEY;
         const tavilyKey = process.env.TAVILY_API_KEY;
 
@@ -121,8 +107,10 @@ export default async function handler(req: Request) {
 
         const hasImage = messages.some(m => Array.isArray(m.content) && m.content.some((c: any) => c.type === "image_url"));
 
-        // Priority: Vision > Reasoning > Versatile
-        let targetModel = hasImage ? "llama-3.2-11b-vision-preview" : "deepseek-r1-distill-llama-70b";
+        // Selection logic: Vision models for images, otherwise respect user choice or default to powerhouse
+        let targetModel = hasImage 
+            ? "llama-3.2-11b-vision-preview" 
+            : (requestedModel && requestedModel.includes("llama") || requestedModel.includes("deepseek") ? requestedModel : "deepseek-r1-distill-llama-70b");
 
         let searchContext = "";
         // Only search if explicitly enabled
@@ -134,7 +122,7 @@ export default async function handler(req: Request) {
         }
 
         const finalSystemPrompt = searchContext
-            ? `${MIRA_SYSTEM_PROMPT}\n\n### CRITICAL: LIVE WEB DATA FOUND (Current Date: ${new Date().toLocaleDateString()})\nUse the following information to answer the user's request. Prioritize this data over your training knowledge for current events, scores, or news.\n\n${searchContext}`
+            ? `${MIRA_SYSTEM_PROMPT}\n\n### CRITICAL: LIVE WEB DATA FOUND (Current Date: ${new Date().toLocaleDateString()})\nUse the following information to answer the user's request. Prioritize this data over your training knowledge. If the data is about sports scores or current events, use it to provide the most up-to-date answer possible.\n\n${searchContext}`
             : MIRA_SYSTEM_PROMPT;
 
         const groqPayload = {
