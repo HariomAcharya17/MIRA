@@ -34,6 +34,7 @@ import {
   recordUsage,
   upsertSession,
   downloadAsFile,
+  addDownload,
 } from "@/lib/store";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -330,8 +331,21 @@ const AI = () => {
     const txt = session.messages
       .map((m) => `[${m.role.toUpperCase()}]\n${m.content}\n`)
       .join("\n---\n\n");
-    downloadAsFile(`mira-session-${session.id}.txt`, txt, "text/plain");
-    toast.success("Session Exported");
+    
+    const filename = `mira-session-${session.id}.txt`;
+    downloadAsFile(filename, txt, "text/plain");
+    
+    // Also add to the persistent downloads repository
+    addDownload({
+      id: crypto.randomUUID(),
+      name: filename,
+      type: "text",
+      content: txt,
+      size: new Blob([txt]).size,
+      createdAt: Date.now(),
+    });
+
+    toast.success("Session Exported to Repository");
   };
 
   const QUOTA = liveQuota;
