@@ -160,7 +160,7 @@ export const Hero = () => {
           </div>
 
           <div className="lg:col-span-6">
-            <div className="glass-panel rounded-[2.5rem] overflow-hidden flex flex-col h-[520px] shadow-3xl border-border bg-card/40 backdrop-blur-xl">
+            <div className="glass-panel rounded-[2.5rem] overflow-hidden flex flex-col h-[380px] sm:h-[450px] lg:h-[520px] shadow-3xl border-border bg-card/40 backdrop-blur-xl">
               <TrafficLights label="MIRA · session-core · llama-3.1-70b" />
               <div className="flex-1 overflow-y-auto p-10 space-y-8 font-mono text-sm leading-relaxed">
                 <div className="flex gap-4 opacity-40">

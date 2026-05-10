@@ -7,7 +7,7 @@ export const Layout = ({ children, hideFooter = false }: { children: ReactNode; 
   <div className="min-h-dvh flex flex-col text-foreground relative selection:bg-mira-purple/30 selection:text-white">
     <GlowOrbs />
     <Header />
-    <main className="flex-1 pt-16 relative z-10">{children}</main>
+    <main className="flex-1 pt-16 relative z-10 min-h-0 flex flex-col">{children}</main>
     {!hideFooter && <Footer />}
   </div>
 );

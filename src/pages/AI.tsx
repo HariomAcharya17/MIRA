@@ -39,12 +39,15 @@ import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const newSessionId = () =>
   `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
 const AI = () => {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const navigate = useNavigate();
   const abortRef = useRef<AbortController | null>(null);
 
@@ -321,7 +324,7 @@ const AI = () => {
 
   return (
     <Layout hideFooter>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[calc(100dvh-64px)] py-4 overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex-1 w-full flex flex-col py-2 sm:py-4 overflow-hidden">
         <div className="flex flex-col lg:flex-row items-stretch gap-6 h-full min-h-0">
           {/* ── Chat Workspace ── */}
           <div className="flex-1 flex flex-col gap-4 min-h-0 min-w-0 relative">
@@ -338,6 +341,20 @@ const AI = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {isMobile && (
+                  <Sheet>
+                    <SheetTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 text-xs rounded-lg">
+                        <Activity className="size-4 mr-1.5" /> Stats
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="right" className="w-[300px] p-0 border-l-border/40 bg-background/95 backdrop-blur-xl">
+                      <div className="h-full overflow-y-auto p-6">
+                        <TelemetryContent usedTokens={usedTokens} remainingTokens={remainingTokens} usedPct={usedPct} QUOTA={QUOTA} />
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -346,14 +363,16 @@ const AI = () => {
                 >
                   <Plus className="size-4 mr-1.5" /> New Session
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={exportChat}
-                  className="h-8 text-xs rounded-lg"
-                >
-                  <Download className="size-4 mr-1.5" /> Export
-                </Button>
+                {!isMobile && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={exportChat}
+                    className="h-8 text-xs rounded-lg"
+                  >
+                    <Download className="size-4 mr-1.5" /> Export
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -362,7 +381,7 @@ const AI = () => {
 
               <div
                 ref={scrollRef}
-                className="flex-1 overflow-y-auto p-6 sm:p-10 space-y-12 custom-scrollbar"
+                className="flex-1 overflow-y-auto p-4 sm:p-10 space-y-12 custom-scrollbar"
               >
                 {session.messages.length === 0 ? (
                   <EmptyState onPick={(p) => setInput(p)} />
@@ -387,7 +406,7 @@ const AI = () => {
                 )}
               </div>
 
-              <div className="p-6 sm:p-8 border-t border-border bg-muted/10 shrink-0">
+              <div className="p-4 sm:p-8 border-t border-border bg-muted/10 shrink-0">
                 <div className="max-w-4xl mx-auto">
                   <div className="bg-card border border-border rounded-3xl overflow-hidden flex flex-col shadow-sm focus-within:border-mira-purple/50 transition-all duration-200">
                     <textarea
@@ -453,97 +472,106 @@ const AI = () => {
             </div>
           </div>
 
-          {/* COLORFUL TELEMETRY SIDEBAR */}
-          <div className="w-full lg:w-[320px] shrink-0 min-h-0 flex flex-col">
-            <div className="glass-panel p-8 rounded-[2.5rem] flex flex-col gap-8 flex-1 border-border/40 dark:border-white/5 bg-card/10 dark:bg-white/[0.01]">
-              <div className="flex items-center gap-3 px-2">
-                <div className="size-2 bg-mira-purple rounded-full animate-ping" />
-                <span className="text-[11px] font-mono uppercase tracking-[0.4em] text-foreground dark:text-muted-foreground/60 font-bold">
-                  Telemetry Core
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                {/* USED TOKENS - VIBRANT CYAN/BLUE */}
-                <div className="relative group overflow-hidden bg-gradient-to-br from-mira-cyan/20 to-mira-blue/20 border border-mira-cyan/20 rounded-2xl p-5 transition-all duration-500 hover:scale-[1.02] shadow-sm">
-                  <div className="absolute -right-4 -top-4 size-24 bg-mira-cyan/10 blur-2xl rounded-full" />
-                  <div className="flex items-center gap-2 mb-3">
-                    <Activity className="size-3.5 text-mira-cyan" />
-                    <span className="text-[9px] font-mono uppercase tracking-widest text-mira-cyan font-bold">
-                      Neural Used
-                    </span>
-                  </div>
-                  <div className="text-2xl font-bold tabular-nums tracking-tighter text-foreground dark:text-white drop-shadow-sm">
-                    {usedTokens.toLocaleString()}
-                    <span className="text-[10px] font-mono text-muted-foreground dark:text-white/30 ml-1.5 uppercase">
-                      tokens
-                    </span>
-                  </div>
-                </div>
-
-                {/* REMAINING - VIBRANT PINK/PURPLE */}
-                <div className="relative group overflow-hidden bg-gradient-to-br from-mira-pink/20 to-mira-purple/20 border border-mira-pink/20 rounded-2xl p-5 transition-all duration-500 hover:scale-[1.02] shadow-sm">
-                  <div className="absolute -right-4 -top-4 size-24 bg-mira-pink/10 blur-2xl rounded-full" />
-                  <div className="flex items-center gap-2 mb-3">
-                    <Zap className="size-3.5 text-mira-pink" />
-                    <span className="text-[9px] font-mono uppercase tracking-widest text-mira-pink font-bold">
-                      Available
-                    </span>
-                  </div>
-                  <div className="text-2xl font-bold tabular-nums tracking-tighter text-foreground dark:text-white drop-shadow-sm">
-                    {remainingTokens.toLocaleString()}
-                    <span className="text-[10px] font-mono text-muted-foreground dark:text-white/30 ml-1.5 uppercase">
-                      tokens
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3 px-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/40 font-bold">
-                    System Load
-                  </span>
-                  <span className="text-[9px] font-mono text-mira-purple font-bold">
-                    {usedPct.toFixed(2)}%
-                  </span>
-                </div>
-                <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden p-[1px] border border-white/5">
-                  <div
-                    className="h-full bg-gradient-to-r from-mira-blue via-mira-purple to-mira-pink rounded-full transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(168,85,247,0.5)]"
-                    style={{ width: `${usedPct}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[8px] font-mono text-muted-foreground/30 font-bold uppercase tracking-widest">
-                  <span>Zero</span>
-                  <span>{QUOTA.toLocaleString()} Max</span>
-                </div>
-              </div>
-
-              <div className="h-px bg-white/5" />
-
-              <div className="space-y-3 px-2">
-                <MetaLine icon={ShieldCheck} label="Identity" value="Secured" color="text-emerald-500" />
-                <MetaLine icon={Hash} label="Protocol" value="Quantum" color="text-mira-cyan" />
-                <MetaLine icon={Lock} label="Storage" value="AES-256" color="text-mira-pink" />
-              </div>
-
-              <div className="mt-auto p-5 rounded-2xl bg-gradient-to-b from-white/[0.03] to-transparent border border-white/5 space-y-2">
-                <div className="flex items-center gap-2 text-[9px] font-mono text-mira-purple uppercase tracking-[0.2em] font-black">
-                  <ShieldCheck className="size-3 text-emerald-500 shadow-emerald-500/50" /> 
-                  Privacy Shield
-                </div>
-                <p className="text-[9px] text-muted-foreground/50 leading-relaxed font-medium">
-                  Your neural sessions are localized and encrypted. MIRA ensures zero remote data retention.
-                </p>
+          {/* COLORFUL TELEMETRY SIDEBAR - Hidden on mobile, shown in Sheet */}
+          {!isMobile && (
+            <div className="w-full lg:w-[320px] shrink-0 min-h-0 flex flex-col">
+              <div className="glass-panel p-8 rounded-[2.5rem] flex flex-col gap-8 flex-1 border-border/40 dark:border-white/5 bg-card/10 dark:bg-white/[0.01]">
+                <TelemetryContent usedTokens={usedTokens} remainingTokens={remainingTokens} usedPct={usedPct} QUOTA={QUOTA} />
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </Layout>
   );
 };
+
+// ── Telemetry Content Component ────────────────────────────────────────────────
+const TelemetryContent = ({ usedTokens, remainingTokens, usedPct, QUOTA }: { usedTokens: number; remainingTokens: number; usedPct: number; QUOTA: number }) => (
+  <>
+    <div className="flex items-center gap-3 px-2">
+      <div className="size-2 bg-mira-purple rounded-full animate-ping" />
+      <span className="text-[11px] font-mono uppercase tracking-[0.4em] text-foreground dark:text-muted-foreground/60 font-bold">
+        Telemetry Core
+      </span>
+    </div>
+
+    <div className="grid grid-cols-1 gap-4">
+      {/* USED TOKENS - VIBRANT CYAN/BLUE */}
+      <div className="relative group overflow-hidden bg-gradient-to-br from-mira-cyan/20 to-mira-blue/20 border border-mira-cyan/20 rounded-2xl p-5 transition-all duration-500 hover:scale-[1.02] shadow-sm">
+        <div className="absolute -right-4 -top-4 size-24 bg-mira-cyan/10 blur-2xl rounded-full" />
+        <div className="flex items-center gap-2 mb-3">
+          <Activity className="size-3.5 text-mira-cyan" />
+          <span className="text-[9px] font-mono uppercase tracking-widest text-mira-cyan font-bold">
+            Neural Used
+          </span>
+        </div>
+        <div className="text-2xl font-bold tabular-nums tracking-tighter text-foreground dark:text-white drop-shadow-sm">
+          {usedTokens.toLocaleString()}
+          <span className="text-[10px] font-mono text-muted-foreground dark:text-white/30 ml-1.5 uppercase">
+            tokens
+          </span>
+        </div>
+      </div>
+
+      {/* REMAINING - VIBRANT PINK/PURPLE */}
+      <div className="relative group overflow-hidden bg-gradient-to-br from-mira-pink/20 to-mira-purple/20 border border-mira-pink/20 rounded-2xl p-5 transition-all duration-500 hover:scale-[1.02] shadow-sm">
+        <div className="absolute -right-4 -top-4 size-24 bg-mira-pink/10 blur-2xl rounded-full" />
+        <div className="flex items-center gap-2 mb-3">
+          <Zap className="size-3.5 text-mira-pink" />
+          <span className="text-[9px] font-mono uppercase tracking-widest text-mira-pink font-bold">
+            Available
+          </span>
+        </div>
+        <div className="text-2xl font-bold tabular-nums tracking-tighter text-foreground dark:text-white drop-shadow-sm">
+          {remainingTokens.toLocaleString()}
+          <span className="text-[10px] font-mono text-muted-foreground dark:text-white/30 ml-1.5 uppercase">
+            tokens
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div className="space-y-3 px-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/40 font-bold">
+          System Load
+        </span>
+        <span className="text-[9px] font-mono text-mira-purple font-bold">
+          {usedPct.toFixed(2)}%
+        </span>
+      </div>
+      <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden p-[1px] border border-white/5">
+        <div
+          className="h-full bg-gradient-to-r from-mira-blue via-mira-purple to-mira-pink rounded-full transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(168,85,247,0.5)]"
+          style={{ width: `${usedPct}%` }}
+        />
+      </div>
+      <div className="flex justify-between text-[8px] font-mono text-muted-foreground/30 font-bold uppercase tracking-widest">
+        <span>Zero</span>
+        <span>{QUOTA.toLocaleString()} Max</span>
+      </div>
+    </div>
+
+    <div className="h-px bg-white/5" />
+
+    <div className="space-y-3 px-2">
+      <MetaLine icon={ShieldCheck} label="Identity" value="Secured" color="text-emerald-500" />
+      <MetaLine icon={Hash} label="Protocol" value="Quantum" color="text-mira-cyan" />
+      <MetaLine icon={Lock} label="Storage" value="AES-256" color="text-mira-pink" />
+    </div>
+
+    <div className="mt-auto p-5 rounded-2xl bg-gradient-to-b from-white/[0.03] to-transparent border border-white/5 space-y-2">
+      <div className="flex items-center gap-2 text-[9px] font-mono text-mira-purple uppercase tracking-[0.2em] font-black">
+        <ShieldCheck className="size-3 text-emerald-500 shadow-emerald-500/50" /> 
+        Privacy Shield
+      </div>
+      <p className="text-[9px] text-muted-foreground/50 leading-relaxed font-medium">
+        Your neural sessions are localized and encrypted. MIRA ensures zero remote data retention.
+      </p>
+    </div>
+  </>
+);
 
 // ── Glow letter effect ────────────────────────────────────────────────────────
 const GlowLetter = ({ letter }: { letter: string }) => (
