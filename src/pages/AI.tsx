@@ -96,8 +96,17 @@ const AI = () => {
   const [busy, setBusy] = useState(false);
   const [searchEnabled, setSearchEnabled] = useState(false);
 
-  const [liveQuota, setLiveQuota] = useState(100_000);
-  const [liveRemaining, setLiveRemaining] = useState<number | null>(null);
+  // Initialize liveQuota from localStorage if available, otherwise default
+  const [liveQuota, setLiveQuota] = useState(() => {
+    const saved = localStorage.getItem("mira-live-quota");
+    return saved ? parseInt(saved) : 100_000;
+  });
+  
+  // Initialize liveRemaining from localStorage if available
+  const [liveRemaining, setLiveRemaining] = useState<number | null>(() => {
+    const saved = localStorage.getItem("mira-live-remaining");
+    return saved ? parseInt(saved) : null;
+  });
 
   const [usage, setUsage] = useState(() =>
     user
@@ -215,8 +224,16 @@ const AI = () => {
       // UPDATE LIVE QUOTA DATA FROM GROQ HEADERS
       const hLimit = response.headers.get("x-mira-limit-tokens");
       const hRemaining = response.headers.get("x-mira-remaining-tokens");
-      if (hLimit) setLiveQuota(parseInt(hLimit));
-      if (hRemaining) setLiveRemaining(parseInt(hRemaining));
+      if (hLimit) {
+        const limit = parseInt(hLimit);
+        setLiveQuota(limit);
+        localStorage.setItem("mira-live-quota", limit.toString());
+      }
+      if (hRemaining) {
+        const remaining = parseInt(hRemaining);
+        setLiveRemaining(remaining);
+        localStorage.setItem("mira-live-remaining", remaining.toString());
+      }
 
       if (!response.ok) {
         const errText = await response.text();
