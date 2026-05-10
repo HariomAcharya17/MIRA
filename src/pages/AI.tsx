@@ -222,19 +222,8 @@ const AI = () => {
         }),
       });
 
-      // UPDATE LIVE QUOTA DATA FROM GROQ HEADERS
-      const hLimit = response.headers.get("x-mira-limit-tokens");
-      const hRemaining = response.headers.get("x-mira-remaining-tokens");
-      if (hLimit) {
-        const limit = parseInt(hLimit);
-        setLiveQuota(limit);
-        localStorage.setItem("mira-live-quota", limit.toString());
-      }
-      if (hRemaining) {
-        const remaining = parseInt(hRemaining);
-        setLiveRemaining(remaining);
-        localStorage.setItem("mira-live-remaining", remaining.toString());
-      }
+      // We no longer sync with Groq headers here because they reflect per-minute rate limits, 
+      // which causes numbers to jump around. Instead, we use persistent local tracking.
 
       if (!response.ok) {
         const errText = await response.text();
@@ -348,9 +337,9 @@ const AI = () => {
     toast.success("Session Exported to Repository");
   };
 
-  const QUOTA = liveQuota;
-  const remainingTokens = liveRemaining !== null ? liveRemaining : Math.max(QUOTA - usage.totalTokens, 0);
-  const usedTokens = QUOTA - remainingTokens;
+  const QUOTA = 100_000;
+  const usedTokens = usage.totalTokens;
+  const remainingTokens = Math.max(QUOTA - usedTokens, 0);
   const usedPct = Math.min((usedTokens / QUOTA) * 100, 100);
 
   return (
