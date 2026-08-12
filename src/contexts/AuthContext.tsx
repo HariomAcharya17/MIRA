@@ -99,6 +99,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     function enableMockAuth() {
       setIsMock(true);
+      
+      // Clear old Supabase auth tokens from localStorage to prevent background refresh error triggers
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
+          localStorage.removeItem(key);
+        }
+      });
+
       const savedUser = localStorage.getItem("mira-mock-user");
       if (savedUser) {
         try {
