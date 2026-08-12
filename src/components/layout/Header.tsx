@@ -15,7 +15,7 @@ const navItems = [
 
 export const Header = () => {
   const { theme, toggleTheme } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, logout, isMock } = useAuth();
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -85,6 +85,11 @@ export const Header = () => {
 
           {user ? (
             <>
+              {isMock && (
+                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 font-mono text-[9px] uppercase tracking-wider animate-pulse">
+                  Offline
+                </span>
+              )}
               <Link to="/account" className="hidden sm:flex">
                 <Button variant="ghost" size="sm" className="gap-2">
                   <UserIcon className="size-4" />

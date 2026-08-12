@@ -36,15 +36,27 @@ export type UsageStats = {
 
 // ── USER-SCOPED KEY HELPERS ──────────────────────────────────────────────────
 const getUserId = (): string | null => {
-  // Read synchronously from the cached session — no async needed
+  // 1. Try Supabase session first
   const raw = Object.keys(localStorage).find((k) => k.startsWith("sb-") && k.endsWith("-auth-token"));
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(localStorage.getItem(raw) || "");
-    return parsed?.user?.id ?? null;
-  } catch {
-    return null;
+  if (raw) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(raw) || "");
+      if (parsed?.user?.id) return parsed.user.id;
+    } catch {
+      /* ignore */
+    }
   }
+  // 2. Try Mock session
+  const mock = localStorage.getItem("mira-mock-user");
+  if (mock) {
+    try {
+      const parsed = JSON.parse(mock);
+      if (parsed?.id) return parsed.id;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
 };
 
 const key = (base: string): string => {

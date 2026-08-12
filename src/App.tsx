@@ -8,6 +8,8 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Index from "./pages/Index.tsx";
 import AI from "./pages/AI.tsx";
 import Login from "./pages/Login.tsx";
+import Signup from "./pages/Signup.tsx";
+import ForgotPassword from "./pages/ForgotPassword.tsx";
 import Account from "./pages/Account.tsx";
 import History from "./pages/History.tsx";
 import Downloads from "./pages/Downloads.tsx";
@@ -49,6 +51,8 @@ const App = () => (
                 }
               />
               <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route
                 path="/account"
                 element={

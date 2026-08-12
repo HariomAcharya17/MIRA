@@ -8,7 +8,7 @@ import { LogOut, MessageSquare, History, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const Account = () => {
-  const { user, logout, loading } = useAuth();
+  const { user, logout, loading, isMock } = useAuth();
   
   if (loading) {
     return (
@@ -40,8 +40,12 @@ const Account = () => {
                 </div>
                 <div>
                   <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-mira-cyan mb-2 flex items-center justify-center sm:justify-start gap-2">
-                    <span className="size-1 bg-mira-cyan rounded-full animate-pulse" />
-                    Neural Interface Member
+                    <span className={cn("size-1 rounded-full", isMock ? "bg-yellow-400 animate-pulse" : "bg-mira-cyan animate-pulse")} />
+                    {isMock ? (
+                      <span className="text-yellow-400">Offline Mock Member</span>
+                    ) : (
+                      <span className="text-mira-cyan">Neural Interface Member</span>
+                    )}
                   </div>
                   <h1 className="text-3xl font-semibold tracking-tight mb-1">{user.name}</h1>
                   <div className="text-sm text-muted-foreground font-light opacity-80">{user.email}</div>

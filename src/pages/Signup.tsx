@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { TrafficLights } from "@/components/TrafficLights";
 import { Button } from "@/components/ui/button";
@@ -9,32 +9,42 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Sparkles, ShieldCheck, Fingerprint, WifiOff, Globe } from "lucide-react";
 
-const Login = () => {
+const Signup = () => {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const { login, isMock } = useAuth();
+  const { signup, isMock } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-
-  // Redirect back to page prior to login redirect
-  const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || "/account";
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password) {
-      toast.error("Please provide both email and cipher key.");
+    const cleanName = name.trim();
+    const cleanEmail = email.trim();
+
+    if (!cleanName || !cleanEmail || !password || !confirmPassword) {
+      toast.error("Please fill out all identity signature parameters.");
+      return;
+    }
+
+    if (password.length < 6) {
+      toast.error("Cipher key must be at least 6 characters.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      toast.error("Cipher keys do not match. Verification failed.");
       return;
     }
 
     setBusy(true);
-    const cleanEmail = email.trim();
     try {
-      await login(cleanEmail, password);
-      toast.success("Identity verified. Neural uplink established.");
-      navigate(from, { replace: true });
+      await signup(cleanName, cleanEmail, password);
+      toast.success("Credentials established. Neural workspace unlocked.");
+      navigate("/account");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Authentication sequence failed");
+      toast.error(err instanceof Error ? err.message : "Registration sequence failed");
     } finally {
       setBusy(false);
     }
@@ -73,18 +83,30 @@ const Login = () => {
           <div className="relative group">
             <div className="absolute -inset-1 bg-gradient-mira rounded-2xl blur-2xl opacity-10 group-hover:opacity-20 transition-opacity duration-700" />
             <div className="relative glass-panel rounded-2xl overflow-hidden border-white/5 shadow-2xl">
-              <TrafficLights label="uplink // authentication" />
+              <TrafficLights label="uplink // registration" />
               <form onSubmit={submit} className="p-8 sm:p-10 space-y-6">
                 <div className="text-center sm:text-left">
                   <h1 className="text-2xl font-semibold tracking-tight mb-2">
-                    Initialize Link
+                    Create Identity
                   </h1>
                   <p className="text-sm text-muted-foreground font-light leading-relaxed">
-                    Provide your credentials to access the neural workspace.
+                    Establish your neural signature to begin commanding frontier models.
                   </p>
                 </div>
 
                 <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name" className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground ml-1">Operator Name</Label>
+                    <Input
+                      id="name"
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Ada Lovelace"
+                      className="h-11 bg-white/[0.02] border-white/5 focus:border-mira-purple/30 transition-all text-sm"
+                      required
+                    />
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="email" className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground ml-1">Secure Email</Label>
                     <Input
@@ -98,12 +120,7 @@ const Login = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <div className="flex justify-between items-center px-1">
-                      <Label htmlFor="password" className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Cipher Key</Label>
-                      <Link to="/forgot-password" className="text-[10px] text-mira-purple hover:text-mira-cyan hover:underline transition-colors font-mono">
-                        Forgot Key?
-                      </Link>
-                    </div>
+                    <Label htmlFor="password" className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground ml-1">Cipher Key</Label>
                     <Input
                       id="password"
                       type="password"
@@ -114,33 +131,38 @@ const Login = () => {
                       required
                     />
                   </div>
-                </div>
-
-                {isMock && (
-                  <div className="p-3.5 rounded-lg bg-yellow-500/5 border border-yellow-500/10 text-[11px] text-yellow-500/80 font-mono leading-normal">
-                    💡 <strong>Demo Credentials</strong>:<br />
-                    Use email <span className="underline">admin@mira.io</span> & password <span className="underline">password</span> or register a new identity.
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword" className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground ml-1">Verify Cipher Key</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="h-11 bg-white/[0.02] border-white/5 focus:border-mira-purple/30 transition-all text-sm"
+                      required
+                    />
                   </div>
-                )}
+                </div>
 
                 <Button type="submit" disabled={busy} className="btn-mira w-full h-11 gap-2 uppercase tracking-widest text-xs font-bold shadow-lg shadow-mira-purple/20">
                   {busy ? (
                     <span className="flex items-center gap-2">
-                      <ShieldCheck className="size-4 animate-pulse" /> Verifying...
+                      <ShieldCheck className="size-4 animate-pulse" /> Establishing...
                     </span>
                   ) : (
                     <>
                       <Sparkles className="size-4" />
-                      Execute Uplink
+                      Establish Link
                     </>
                   )}
                 </Button>
 
                 <div className="text-center pt-2">
                   <p className="text-xs text-muted-foreground font-light">
-                    Awaiting identity?{" "}
-                    <Link to="/signup" className="text-mira-purple font-medium hover:text-mira-cyan transition-colors underline-offset-4 hover:underline">
-                      Register signature
+                    Already registered?{" "}
+                    <Link to="/login" className="text-mira-purple font-medium hover:text-mira-cyan transition-colors underline-offset-4 hover:underline">
+                      Return to Uplink
                     </Link>
                   </p>
                 </div>
@@ -161,4 +183,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default Signup;
