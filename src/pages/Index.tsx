@@ -3,6 +3,7 @@ import { Layout } from "@/components/layout/Layout";
 import { Hero } from "@/components/landing/Hero";
 import { Features } from "@/components/landing/Features";
 import { Contact } from "@/components/landing/Contact";
+import { CallToAction } from "@/components/landing/CallToAction";
 
 const Index = () => {
   // Support deep links like /#features from other pages.
@@ -18,6 +19,7 @@ const Index = () => {
       <Hero />
       <Features />
       <Contact />
+      <CallToAction />
     </Layout>
   );
 };

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Menu, SquarePen, X } from "lucide-react";
+import { AlertTriangle, BookOpen, Code2, Globe, Menu, PenLine, SquarePen, X } from "lucide-react";
+import { Logo } from "@/components/Logo";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
@@ -62,10 +63,10 @@ const store = {
 };
 
 const SUGGESTIONS = [
-  { mode: "general" as Mode, text: "What are today's top technology headlines?" },
-  { mode: "code" as Mode, text: "Explain the difference between useMemo and useCallback with examples." },
-  { mode: "research" as Mode, text: "Compare the current free tiers of the major LLM API providers." },
-  { mode: "writer" as Mode, text: "Rewrite this paragraph to be clearer and more concise:" },
+  { mode: "general" as Mode, icon: Globe, label: "Latest news", text: "What are today's top technology headlines?" },
+  { mode: "code" as Mode, icon: Code2, label: "Code", text: "Explain the difference between useMemo and useCallback with examples." },
+  { mode: "research" as Mode, icon: BookOpen, label: "Research", text: "Compare the current free tiers of the major LLM API providers." },
+  { mode: "writer" as Mode, icon: PenLine, label: "Writing", text: "Rewrite this paragraph to be clearer and more concise:" },
 ];
 
 function pickDefault(data: ModelsResponse | undefined, wanted: ModelRef | null): ModelRef | null {
@@ -77,6 +78,7 @@ function pickDefault(data: ModelsResponse | undefined, wanted: ModelRef | null):
 
 export default function AI() {
   const { user, isMock, logout } = useAuth();
+  const greetingName = user?.name?.split(" ")[0] ?? "";
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const remote = Boolean(user && !isMock);
@@ -433,12 +435,15 @@ export default function AI() {
         >
           <div className="mx-auto w-full max-w-3xl px-4 sm:px-6">
             {session.messages.length === 0 ? (
-              <div className="flex min-h-[55vh] flex-col justify-center py-10">
-                <h1 className="text-2xl font-semibold tracking-tight">What can I help with?</h1>
-                <p className="mt-1.5 text-sm text-muted-foreground">
+              <div className="flex min-h-[60vh] flex-col items-center justify-center py-10 text-center">
+                <Logo className="size-10 rounded-xl text-base" />
+                <h1 className="mt-5 text-2xl sm:text-3xl font-semibold tracking-tight">
+                  {greetingName ? `What can I help with, ${greetingName}?` : "What can I help with?"}
+                </h1>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Answers include live web results. Switch models or modes at any time.
                 </p>
-                <div className="mt-6 grid gap-2 sm:grid-cols-2">
+                <div className="mt-8 grid w-full gap-2.5 sm:grid-cols-2 text-left">
                   {SUGGESTIONS.map((s) => (
                     <button
                       key={s.text}
@@ -447,10 +452,15 @@ export default function AI() {
                         setMode(s.mode);
                         setInput(s.text);
                       }}
-                      className="rounded-lg border border-border px-3.5 py-3 text-left text-sm text-foreground/85 hover:bg-accent transition-colors"
+                      className="group flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-3.5 text-left text-sm hover:border-foreground/20 hover:bg-accent/50 transition-colors"
                     >
-                      <span className="block text-xs text-muted-foreground mb-0.5 capitalize">{s.mode}</span>
-                      {s.text}
+                      <span className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-brand-soft text-brand">
+                        <s.icon className="size-4" />
+                      </span>
+                      <span>
+                        <span className="block text-xs font-medium text-muted-foreground">{s.label}</span>
+                        <span className="mt-0.5 block text-foreground/90">{s.text}</span>
+                      </span>
                     </button>
                   ))}
                 </div>

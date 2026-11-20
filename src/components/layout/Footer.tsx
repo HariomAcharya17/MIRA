@@ -4,7 +4,7 @@ import { Logo } from "@/components/Logo";
 const REPO_URL = "https://github.com/HariomAcharya17/MIRA";
 
 export const Footer = () => (
-  <footer className="border-t border-border mt-24">
+  <footer className="border-t border-border">
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 flex flex-col sm:flex-row gap-8 sm:items-start sm:justify-between">
       <div className="max-w-xs">
         <Link to="/" className="flex items-center gap-2">

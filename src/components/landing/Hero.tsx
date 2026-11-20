@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowUp } from "lucide-react";
+import { ChatPreview } from "./ChatPreview";
 
 const examples = [
-  "Explain the difference between useMemo and useCallback",
-  "Summarize this week's top technology news",
-  "Build a landing page for a coffee shop",
+  "Explain useMemo vs useCallback",
+  "Top tech news this week",
+  "Build a coffee shop landing page",
 ];
 
 export const Hero = () => {
@@ -19,65 +20,71 @@ export const Hero = () => {
   };
 
   return (
-    <section id="home" className="px-4 sm:px-6 pt-20 sm:pt-28 pb-16">
-      <div className="max-w-3xl mx-auto text-center">
-        <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight leading-[1.1] text-balance">
-          Chat with open models, search the web, and build small projects
-        </h1>
-        <p className="mt-5 text-base sm:text-lg text-muted-foreground leading-relaxed max-w-2xl mx-auto text-pretty">
-          Mira puts Llama and other open models from Groq and NVIDIA in one place.
-          Answers cite their web sources, and code projects can be previewed and downloaded as a ZIP.
-        </p>
+    <section id="home" className="relative overflow-hidden">
+      <div className="bg-dots absolute inset-0" aria-hidden />
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-16 sm:pt-24 pb-20 grid gap-14 lg:grid-cols-[1fr_1.05fr] lg:items-center">
+        <div>
+          <span className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground">
+            Free to use · Groq and NVIDIA models
+          </span>
+          <h1 className="mt-5 text-4xl sm:text-[3.25rem] font-semibold leading-[1.05] text-balance">
+            Ask anything. <span className="text-brand">Check the sources.</span> Ship the code.
+          </h1>
+          <p className="mt-5 text-base sm:text-lg text-muted-foreground leading-relaxed max-w-xl text-pretty">
+            Mira puts Llama and other open models in one chat. Replies cite the pages they used, and code requests can
+            become a full project you preview and download.
+          </p>
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            start(prompt);
-          }}
-          className="mt-10 text-left rounded-xl border border-border bg-card shadow-sm focus-within:border-ring/60 focus-within:ring-2 focus-within:ring-ring/15 transition"
-        >
-          <label htmlFor="hero-prompt" className="sr-only">
-            Ask Mira
-          </label>
-          <textarea
-            id="hero-prompt"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                start(prompt);
-              }
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              start(prompt);
             }}
-            rows={3}
-            placeholder="Ask anything…"
-            className="block w-full resize-none bg-transparent px-4 pt-4 pb-2 text-[15px] outline-none placeholder:text-muted-foreground"
-          />
-          <div className="flex items-center justify-between px-3 pb-3">
-            <span className="text-xs text-muted-foreground pl-1">Enter to send · Shift + Enter for a new line</span>
-            <button
-              type="submit"
-              aria-label="Start chat"
-              className="inline-flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
-              disabled={!prompt.trim()}
-            >
-              <ArrowUp className="size-4" />
-            </button>
-          </div>
-        </form>
+            className="mt-8 max-w-xl rounded-xl border border-border bg-card shadow-sm focus-within:border-ring/60 focus-within:ring-4 focus-within:ring-ring/10 transition"
+          >
+            <label htmlFor="hero-prompt" className="sr-only">
+              Ask Mira
+            </label>
+            <textarea
+              id="hero-prompt"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  start(prompt);
+                }
+              }}
+              rows={2}
+              placeholder="Ask Mira anything…"
+              className="block w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[15px] outline-none placeholder:text-muted-foreground"
+            />
+            <div className="flex items-center justify-between px-3 pb-3">
+              <span className="text-xs text-muted-foreground pl-1 hidden sm:block">Press Enter to start a chat</span>
+              <button
+                type="submit"
+                className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                Start <ArrowUp className="size-3.5" />
+              </button>
+            </div>
+          </form>
 
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
-          {examples.map((ex) => (
-            <button
-              key={ex}
-              type="button"
-              onClick={() => start(ex)}
-              className="rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            >
-              {ex}
-            </button>
-          ))}
+          <div className="mt-4 flex flex-wrap gap-2 max-w-xl">
+            {examples.map((ex) => (
+              <button
+                key={ex}
+                type="button"
+                onClick={() => start(ex)}
+                className="rounded-full border border-border bg-background px-3 py-1 text-[13px] text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
+              >
+                {ex}
+              </button>
+            ))}
+          </div>
         </div>
+
+        <ChatPreview />
       </div>
     </section>
   );

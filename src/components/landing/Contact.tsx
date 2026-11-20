@@ -3,8 +3,8 @@ import { Github, Bug } from "lucide-react";
 const REPO_URL = "https://github.com/HariomAcharya17/MIRA";
 
 export const Contact = () => (
-  <section id="contact" className="px-4 sm:px-6 py-20 border-t border-border">
-    <div className="max-w-6xl mx-auto grid gap-10 md:grid-cols-2 md:items-center">
+  <section id="contact" className="py-20 border-t border-border">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 grid gap-10 md:grid-cols-2 md:items-center">
       <div>
         <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Feedback and questions</h2>
         <p className="mt-3 text-muted-foreground leading-relaxed max-w-md">
