@@ -1,16 +1,28 @@
-import { supabase } from "@/lib/supabase";
+import type { Mode, ProjectFile, ProviderId, Source } from "@/lib/mira-api";
 
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   createdAt: number;
+  model?: string;
+  provider?: ProviderId;
+  sources?: Source[];
+  notices?: string[];
+  reasoning?: string;
+  project?: ProjectFile[];
+  error?: string;
 };
 
 export type ChatSession = {
   id: string;
   title: string;
   model: string;
+  provider?: ProviderId;
+  mode?: Mode;
+  /** Running summary of messages[0..summarizedCount) built by the server. */
+  summary?: string;
+  summarizedCount?: number;
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
@@ -69,13 +81,35 @@ const KEY_DOWNLOADS = "mira-downloads";
 const KEY_USAGE = "mira-usage";
 
 // ── SESSIONS ─────────────────────────────────────────────────────────────────
-export const getSessions = (): ChatSession[] => {
-  const raw = localStorage.getItem(key(KEY_SESSIONS));
-  return raw ? JSON.parse(raw) : [];
+const safeParse = <T,>(raw: string | null, fallback: T): T => {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 };
 
-export const saveSessions = (s: ChatSession[]) =>
-  localStorage.setItem(key(KEY_SESSIONS), JSON.stringify(s));
+export const getSessions = (): ChatSession[] =>
+  safeParse<ChatSession[]>(localStorage.getItem(key(KEY_SESSIONS)), []).sort((a, b) => b.updatedAt - a.updatedAt);
+
+export const saveSessions = (s: ChatSession[]) => {
+  try {
+    localStorage.setItem(key(KEY_SESSIONS), JSON.stringify(s));
+  } catch {
+    // Storage full: drop the oldest sessions and retry once.
+    const trimmed = [...s].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, Math.max(5, Math.floor(s.length / 2)));
+    try {
+      localStorage.setItem(key(KEY_SESSIONS), JSON.stringify(trimmed));
+    } catch {
+      /* give up silently; chat still works in memory */
+    }
+  }
+};
+
+export const getSession = (id: string) => getSessions().find((s) => s.id === id);
+
+export const clearSessions = () => localStorage.removeItem(key(KEY_SESSIONS));
 
 export const upsertSession = (session: ChatSession) => {
   const all = getSessions();
@@ -89,10 +123,7 @@ export const deleteSession = (id: string) =>
   saveSessions(getSessions().filter((s) => s.id !== id));
 
 // ── DOWNLOADS ────────────────────────────────────────────────────────────────
-export const getDownloads = (): DownloadItem[] => {
-  const raw = localStorage.getItem(key(KEY_DOWNLOADS));
-  return raw ? JSON.parse(raw) : [];
-};
+export const getDownloads = (): DownloadItem[] => safeParse<DownloadItem[]>(localStorage.getItem(key(KEY_DOWNLOADS)), []);
 
 export const addDownload = (item: DownloadItem) => {
   const all = getDownloads();
@@ -107,8 +138,8 @@ export const deleteDownload = (id: string) => {
 
 // ── USAGE ────────────────────────────────────────────────────────────────────
 export const getUsage = (): UsageStats => {
-  const raw = localStorage.getItem(key(KEY_USAGE));
-  if (raw) return JSON.parse(raw);
+  const raw = safeParse<UsageStats | null>(localStorage.getItem(key(KEY_USAGE)), null);
+  if (raw) return raw;
   return { totalTokens: 0, promptTokens: 0, completionTokens: 0, requests: 0, byModel: {}, history: [] };
 };
 

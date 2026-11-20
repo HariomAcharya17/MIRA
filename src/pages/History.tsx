@@ -1,16 +1,19 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { TrafficLights } from "@/components/TrafficLights";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, MessageSquare, Search } from "lucide-react";
-import { ChatSession, deleteSession, getSessions } from "@/lib/store";
-import { MIRA_MODELS } from "@/lib/mira-api";
+import { ChatSession, clearSessions, deleteSession, getSessions } from "@/lib/store";
+import { deleteAllRemoteSessions, deleteRemoteSession } from "@/lib/chat-sync";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
 const HistoryPage = () => {
-  const { user } = useAuth();
+  const { user, isMock } = useAuth();
+  const navigate = useNavigate();
+  const remote = Boolean(user && !isMock);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<ChatSession | null>(null);
@@ -25,16 +28,16 @@ const HistoryPage = () => {
     setSessions(getSessions());
   }, [user]);
 
-  const filtered = sessions.filter((s) =>
-    MIRA_MODELS.some(m => m.id === s.model) && (
-      s.title.toLowerCase().includes(query.toLowerCase()) ||
-      s.messages.some((m) => m.content.toLowerCase().includes(query.toLowerCase()))
-    )
+  // Old sessions may reference retired models; show them anyway.
+  const q = query.toLowerCase();
+  const filtered = sessions.filter(
+    (s) => s.title.toLowerCase().includes(q) || s.messages.some((m) => m.content.toLowerCase().includes(q)),
   );
 
   const remove = (id: string) => {
     if (!confirm("Decommission this log entry?")) return;
     deleteSession(id);
+    if (remote) deleteRemoteSession(id).catch(() => {});
     setSessions(getSessions());
     if (open?.id === id) setOpen(null);
     toast.success("Entry decommissioned.");
@@ -42,7 +45,8 @@ const HistoryPage = () => {
 
   const clearAll = () => {
     if (!confirm("Wipe all telemetry logs? This action is irreversible.")) return;
-    localStorage.removeItem("mira-sessions");
+    clearSessions(); // sessions are stored under a per-user key
+    if (remote) deleteAllRemoteSessions().catch(() => {});
     setSessions([]);
     setOpen(null);
     toast.success("Telemetry logs wiped.");
@@ -94,7 +98,6 @@ const HistoryPage = () => {
         ) : (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filtered.map((s, i) => {
-              const m = MIRA_MODELS.find((x) => x.id === s.model);
               return (
                 <div
                   key={s.id}
@@ -102,7 +105,7 @@ const HistoryPage = () => {
                   style={{ animationDelay: `${i * 0.05}s` }}
                   onClick={() => setOpen(s)}
                 >
-                  <TrafficLights label={`${m?.name ?? s.model} // 0x${s.id.slice(2, 8).toUpperCase()}`} />
+                  <TrafficLights label={s.model || "Chat"} />
                   <div className="p-6">
                     <h3 className="font-semibold mb-2 line-clamp-1 group-hover:text-mira-purple transition-colors">{s.title}</h3>
                     <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-4">
@@ -146,7 +149,10 @@ const HistoryPage = () => {
               </div>
               <div className="border-t border-white/5 p-4 bg-white/[0.01] flex justify-between items-center">
                 <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest ml-4">End of Transmission</span>
-                <Button variant="outline" size="sm" onClick={() => setOpen(null)} className="border-white/10 px-6">Close Archive</Button>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => navigate(`/ai?s=${encodeURIComponent(open.id)}`)} className="px-4">Open in chat</Button>
+                  <Button variant="outline" size="sm" onClick={() => setOpen(null)} className="border-white/10 px-6">Close</Button>
+                </div>
               </div>
             </div>
           </div>

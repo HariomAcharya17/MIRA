@@ -5,16 +5,20 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import Index from "./pages/Index.tsx";
-import AI from "./pages/AI.tsx";
-import Login from "./pages/Login.tsx";
-import Signup from "./pages/Signup.tsx";
-import ForgotPassword from "./pages/ForgotPassword.tsx";
-import Account from "./pages/Account.tsx";
-import History from "./pages/History.tsx";
-import Downloads from "./pages/Downloads.tsx";
+import { lazy, Suspense } from "react";
 import { Analytics } from "@vercel/analytics/react";
-import NotFound from "./pages/NotFound.tsx";
+
+// Route-level code splitting keeps the landing page's 3D/animation code out of
+// the chat bundle and vice versa.
+const Index = lazy(() => import("./pages/Index.tsx"));
+const AI = lazy(() => import("./pages/AI.tsx"));
+const Login = lazy(() => import("./pages/Login.tsx"));
+const Signup = lazy(() => import("./pages/Signup.tsx"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword.tsx"));
+const Account = lazy(() => import("./pages/Account.tsx"));
+const History = lazy(() => import("./pages/History.tsx"));
+const Downloads = lazy(() => import("./pages/Downloads.tsx"));
+const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 const queryClient = new QueryClient();
 
@@ -40,7 +44,8 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <Routes>
+            <Suspense fallback={null}>
+              <Routes>
               <Route path="/" element={<Index />} />
               <Route
                 path="/ai"
@@ -78,7 +83,8 @@ const App = () => (
                 }
               />
               <Route path="*" element={<NotFound />} />
-            </Routes>
+              </Routes>
+            </Suspense>
           </BrowserRouter>
           <Analytics />
         </TooltipProvider>

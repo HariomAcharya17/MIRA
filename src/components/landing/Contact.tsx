@@ -11,7 +11,7 @@ const Typewriter = ({ words }: { words: string[] }) => {
   const [typingSpeed, setTypingSpeed] = useState(80);
 
   useEffect(() => {
-    let timer = setTimeout(() => {
+    const timer = setTimeout(() => {
       const i = loopNum % words.length;
       const fullText = words[i];
 

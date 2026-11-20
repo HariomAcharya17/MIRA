@@ -1,154 +1,120 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Layout } from "@/components/layout/Layout";
-import { TrafficLights } from "@/components/TrafficLights";
-import { Button } from "@/components/ui/button";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { AlertTriangle, Menu, SquarePen, X } from "lucide-react";
+import { toast } from "sonner";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { useAuth } from "@/contexts/AuthContext";
+import { ChatSidebar } from "@/components/chat/ChatSidebar";
+import { ModelPicker, type ModelRef } from "@/components/chat/ModelPicker";
+import { Composer } from "@/components/chat/Composer";
+import { MessageView } from "@/components/chat/MessageView";
+import { ProjectPanel } from "@/components/chat/ProjectPanel";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Send,
-  Download,
-  Plus,
-  Sparkles,
-  User as UserIcon,
-  Brain,
-  Activity,
-  ShieldCheck,
-  Hash,
-  BarChart3,
-  Lock,
-  Info,
-  Globe,
-  Zap,
-} from "lucide-react";
-import { MIRA_MODELS } from "@/lib/mira-api";
+  ChatHttpError,
+  fetchModels,
+  streamChat,
+  type Mode,
+  type ModelsResponse,
+  type StreamEvent,
+  type UsageEvent,
+} from "@/lib/mira-api";
 import {
   ChatMessage,
   ChatSession,
-  getUsage,
+  deleteSession,
+  getSession,
+  getSessions,
   recordUsage,
+  saveSessions,
   upsertSession,
-  downloadAsFile,
-  addDownload,
 } from "@/lib/store";
-import { toast } from "sonner";
-import ReactMarkdown from "react-markdown";
-import { cn } from "@/lib/utils";
-import { useAuth } from "@/contexts/AuthContext";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { deleteRemoteSession, pullSessions, pushSession } from "@/lib/chat-sync";
 
-const newSessionId = () =>
-  `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+const newId = () => `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+const blankSession = (model?: ModelRef | null, mode: Mode = "general"): ChatSession => ({
+  id: newId(),
+  title: "New chat",
+  model: model?.id ?? "",
+  provider: model?.provider,
+  mode,
+  messages: [],
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+});
 
-const AI = () => {
-  const { user } = useAuth();
-  const isMobile = useIsMobile();
-  const navigate = useNavigate();
-  const abortRef = useRef<AbortController | null>(null);
-
-  // Removed capability selector state as requested
-  const capability = "text";
-
-  const filteredModels = useMemo(() => {
-    return MIRA_MODELS.filter((m) => {
-      if (capability === "text")
-        return ["general", "reasoning", "vision", "multimodal"].includes(
-          m.category
-        );
-      if (capability === "code") return m.category === "code";
-      if (capability === "speech") return m.category === "multimodal";
-      return true;
-    });
-  }, [capability]);
-
-  // If no models match the filter (e.g. "code" or "speech" tab), fall back to all
-  const displayModels =
-    filteredModels.length > 0 ? filteredModels : MIRA_MODELS;
-
-  const [modelId, setModelId] = useState(displayModels[0]?.id || MIRA_MODELS[0].id);
-
-  useEffect(() => {
-    if (displayModels.length > 0 && !displayModels.find((m) => m.id === modelId)) {
-      setModelId(displayModels[0].id);
+const store = {
+  get<T>(k: string, fallback: T): T {
+    try {
+      const v = localStorage.getItem(k);
+      return v ? (JSON.parse(v) as T) : fallback;
+    } catch {
+      return fallback;
     }
-  }, [displayModels, modelId]);
+  },
+  set(k: string, v: unknown) {
+    try {
+      localStorage.setItem(k, JSON.stringify(v));
+    } catch {
+      /* ignore */
+    }
+  },
+};
 
-  const model = useMemo(
-    () => MIRA_MODELS.find((m) => m.id === modelId) || MIRA_MODELS[0],
-    [modelId]
-  );
+const SUGGESTIONS = [
+  { mode: "general" as Mode, text: "What are today's top technology headlines?" },
+  { mode: "code" as Mode, text: "Explain the difference between useMemo and useCallback with examples." },
+  { mode: "research" as Mode, text: "Compare the current free tiers of the major LLM API providers." },
+  { mode: "writer" as Mode, text: "Rewrite this paragraph to be clearer and more concise:" },
+];
 
-  const [session, setSession] = useState<ChatSession>(() => ({
-    id: newSessionId(),
-    title: "New Session",
-    model: modelId,
-    messages: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  }));
+function pickDefault(data: ModelsResponse | undefined, wanted: ModelRef | null): ModelRef | null {
+  if (!data?.models.length) return wanted;
+  if (wanted && data.models.some((m) => m.provider === wanted.provider && m.id === wanted.id)) return wanted;
+  const first = data.models.find((m) => !m.isCode) ?? data.models[0];
+  return { provider: first.provider, id: first.id };
+}
 
+export default function AI() {
+  const { user, isMock, logout } = useAuth();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const remote = Boolean(user && !isMock);
+
+  const models = useQuery({ queryKey: ["models"], queryFn: ({ signal }) => fetchModels(signal), staleTime: 10 * 60_000, retry: 1 });
+  const [modelRef, setModelRef] = useState<ModelRef | null>(() => store.get<ModelRef | null>("mira:model", null));
+  const effectiveModel = useMemo(() => pickDefault(models.data, modelRef), [models.data, modelRef]);
+
+  const [mode, setMode] = useState<Mode>(() => store.get<Mode>("mira:mode", "general"));
+  const [project, setProject] = useState(false);
+  const [search, setSearch] = useState(() => store.get("mira:search", true));
+  const [sessions, setSessions] = useState<ChatSession[]>(() => getSessions());
+  const [session, setSession] = useState<ChatSession>(() => {
+    const id = params.get("s");
+    return (id && getSession(id)) || blankSession(null);
+  });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [searchEnabled, setSearchEnabled] = useState(false);
+  const [streamingId, setStreamingId] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ files: number; chars: number } | null>(null);
+  const [openProjectId, setOpenProjectId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [warning, setWarning] = useState<string | null>(null);
 
-  // Initialize liveQuota from localStorage if available, otherwise default
-  const [liveQuota, setLiveQuota] = useState(() => {
-    const saved = localStorage.getItem("mira-live-quota");
-    return saved ? parseInt(saved) : 100_000;
-  });
-  
-  // Initialize liveRemaining from localStorage if available
-  const [liveRemaining, setLiveRemaining] = useState<number | null>(() => {
-    const saved = localStorage.getItem("mira-live-remaining");
-    return saved ? parseInt(saved) : null;
-  });
-
-  const [usage, setUsage] = useState(() =>
-    user
-      ? getUsage()
-      : {
-        totalTokens: 0,
-        promptTokens: 0,
-        completionTokens: 0,
-        requests: 0,
-        byModel: {},
-        history: [],
-      }
-  );
-
-  useEffect(() => {
-    if (!user) {
-      setUsage({
-        totalTokens: 0,
-        promptTokens: 0,
-        completionTokens: 0,
-        requests: 0,
-        byModel: {},
-        history: [],
-      });
-      setSession({
-        id: newSessionId(),
-        title: "New Session",
-        model: modelId,
-        messages: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-      abortRef.current?.abort();
-      setBusy(false);
-    } else {
-      setUsage(getUsage());
-    }
-  }, [user]);
-
+  const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
+  // Id of the chat on screen; set synchronously so a finishing stream never
+  // overwrites a chat the user has switched to.
+  const activeIdRef = useRef(session.id);
 
+  useEffect(() => store.set("mira:mode", mode), [mode]);
+  useEffect(() => store.set("mira:search", search), [search]);
+  useEffect(() => {
+    if (mode !== "code") setProject(false);
+  }, [mode]);
+
+  // Prompt handed over from the landing page.
   useEffect(() => {
     const pending = sessionStorage.getItem("mira-pending-prompt");
     if (pending) {
@@ -157,623 +123,396 @@ const AI = () => {
     }
   }, []);
 
+  // Pull cloud history once for real Supabase users.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [session.messages, busy]);
-
-  useEffect(() => {
+    if (!remote) return;
+    let cancelled = false;
+    pullSessions().then((remoteSessions) => {
+      if (cancelled || !remoteSessions?.length) return;
+      const local = getSessions();
+      const merged = new Map(local.map((s) => [s.id, s]));
+      for (const r of remoteSessions) {
+        const l = merged.get(r.id);
+        if (!l || r.updatedAt > l.updatedAt) merged.set(r.id, r);
+      }
+      saveSessions([...merged.values()]);
+      setSessions(getSessions());
+    });
     return () => {
-      abortRef.current?.abort();
+      cancelled = true;
     };
-  }, []);
+  }, [remote]);
 
-  const send = async () => {
-    if (!input.trim() || busy) return;
+  // Stop any stream when leaving the page.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
-    const userPrompt = input.trim();
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: userPrompt,
-      createdAt: Date.now(),
-    };
+  // Keep scrolled to the bottom while streaming, unless the user scrolled up.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
+  }, [session.messages]);
 
-    const assistantId = crypto.randomUUID();
-    const assistantMsg: ChatMessage = {
-      id: assistantId,
-      role: "assistant",
-      content: "",
-      createdAt: Date.now(),
-    };
+  const persist = useCallback(
+    (s: ChatSession) => {
+      if (!s.messages.length) return;
+      upsertSession(s);
+      setSessions(getSessions());
+      if (remote) pushSession(s).catch(() => {});
+    },
+    [remote],
+  );
 
-    const updated: ChatSession = {
-      ...session,
-      title:
-        session.messages.length === 0
-          ? userPrompt.slice(0, 30)
-          : session.title,
-      messages: [...session.messages, userMsg, assistantMsg],
-      model: modelId,
-      updatedAt: Date.now(),
-    };
+  const chooseModel = (r: ModelRef) => {
+    setModelRef(r);
+    store.set("mira:model", r);
+  };
 
-    setSession(updated);
-    setInput("");
-    setBusy(true);
-
-    const abort = new AbortController();
-    abortRef.current = abort;
-
-    try {
-      let fullContent = "";
-
-      const response = await fetch("/api/mira", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: abort.signal,
-        body: JSON.stringify({
-          model: model.id,
-          search: searchEnabled,
-          messages: updated.messages
-            .slice(0, -1)
-            .map(({ role, content }) => ({ role, content })),
-        }),
-      });
-
-      // We no longer sync with Groq headers here because they reflect per-minute rate limits, 
-      // which causes numbers to jump around. Instead, we use persistent local tracking.
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`API error ${response.status}: ${errText}`);
-      }
-
-      if (!response.body) throw new Error("No response stream");
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (abort.signal.aborted) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) continue;
-
-          const jsonStr = trimmed.slice(5).trim();
-          if (jsonStr === "[DONE]") break;
-          if (!jsonStr) continue;
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            
-            // 1. Handle actual content delta
-            const delta = parsed?.choices?.[0]?.delta?.content;
-            if (typeof delta === "string" && delta.length > 0) {
-              fullContent += delta;
-              setSession((prev) => ({
-                ...prev,
-                messages: prev.messages.map((m) =>
-                  m.id === assistantId ? { ...m, content: fullContent } : m
-                ),
-              }));
-            }
-
-            // 2. Handle final usage report from Groq
-            if (parsed?.usage) {
-              const { prompt_tokens, completion_tokens } = parsed.usage;
-              recordUsage(model.id, prompt_tokens, completion_tokens);
-              setUsage(getUsage());
-            }
-          } catch {
-            // Ignore malformed JSON lines
-          }
-        }
-      }
-
-      if (!abort.signal.aborted) {
-        const finalSession: ChatSession = {
-          ...updated,
-          messages: updated.messages.map((m) =>
-            m.id === assistantId ? { ...m, content: fullContent } : m
-          ),
-          updatedAt: Date.now(),
-        };
-        upsertSession(finalSession);
-      }
-    } catch (e: any) {
-      if (e?.name === "AbortError" || abort.signal.aborted) return;
-      toast.error(e instanceof Error ? e.message : "Handshake failed");
-      setSession((prev) => ({
-        ...prev,
-        messages: prev.messages.filter((m) => m.id !== assistantId),
-      }));
-    } finally {
-      if (!abort.signal.aborted) setBusy(false);
-    }
+  const openSession = (id: string) => {
+    if (busy) abortRef.current?.abort();
+    const s = getSession(id);
+    if (!s) return;
+    activeIdRef.current = s.id;
+    setSession(s);
+    if (s.mode) setMode(s.mode);
+    setOpenProjectId(null);
+    setSidebarOpen(false);
+    setParams({ s: id }, { replace: true });
+    stickRef.current = true;
   };
 
   const newChat = () => {
-    abortRef.current?.abort();
-    setBusy(false);
-    setSession({
-      id: newSessionId(),
-      title: "New Session",
-      model: modelId,
-      messages: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
+    if (busy) abortRef.current?.abort();
+    const fresh = blankSession(effectiveModel, mode);
+    activeIdRef.current = fresh.id;
+    setSession(fresh);
+    setOpenProjectId(null);
+    setSidebarOpen(false);
+    setInput("");
+    setParams({}, { replace: true });
   };
 
-  const exportChat = () => {
-    if (session.messages.length === 0) return;
-    const txt = session.messages
-      .map((m) => `[${m.role.toUpperCase()}]\n${m.content}\n`)
-      .join("\n---\n\n");
-    
-    const filename = `mira-session-${session.id}.txt`;
-    downloadAsFile(filename, txt, "text/plain");
-    
-    // Also add to the persistent downloads repository
-    addDownload({
+  const removeSession = (id: string) => {
+    if (!confirm("Delete this chat? This can't be undone.")) return;
+    deleteSession(id);
+    if (remote) deleteRemoteSession(id).catch(() => {});
+    setSessions(getSessions());
+    if (session.id === id) newChat();
+  };
+
+  const checkQuota = (u: UsageEvent, model: string) => {
+    const warnings: string[] = [];
+    const { requestsLimit, requestsRemaining } = u.limits;
+    if (requestsLimit && requestsRemaining != null && requestsRemaining / requestsLimit < 0.1)
+      warnings.push(`${model}: ${requestsRemaining} of ${requestsLimit} daily requests left. Switch models to keep going.`);
+    if (u.search && u.search.used / u.search.limit >= 0.9)
+      warnings.push(`Web search: ${u.search.used} of ${u.search.limit} monthly credits used.`);
+    setWarning(warnings.length ? warnings.join(" ") : null);
+  };
+
+  const run = async (base: ChatSession, userText: string | null) => {
+    const target = effectiveModel;
+    if (!target) {
+      toast.error(models.error ? "Couldn't load the model list. Refresh to try again." : "Choose a model first.");
+      return;
+    }
+    const now = Date.now();
+    const messages = [...base.messages];
+    if (userText !== null) messages.push({ id: crypto.randomUUID(), role: "user", content: userText, createdAt: now });
+    const assistant: ChatMessage = {
       id: crypto.randomUUID(),
-      name: filename,
-      type: "text",
-      content: txt,
-      size: new Blob([txt]).size,
-      createdAt: Date.now(),
-    });
+      role: "assistant",
+      content: "",
+      createdAt: now,
+      model: target.id,
+      provider: target.provider,
+    };
+    const firstUser = messages.find((m) => m.role === "user")?.content ?? "New chat";
+    let current: ChatSession = {
+      ...base,
+      title: base.messages.length ? base.title : firstUser.replace(/\s+/g, " ").slice(0, 60),
+      model: target.id,
+      provider: target.provider,
+      mode,
+      messages: [...messages, assistant],
+      updatedAt: now,
+    };
+    activeIdRef.current = current.id;
+    setSession(current);
+    setBusy(true);
+    setStreamingId(assistant.id);
+    setProgress(null);
+    stickRef.current = true;
 
-    toast.success("Session Exported to Repository");
+    const summarized = base.summarizedCount ?? 0;
+    const history = messages
+      .slice(summarized)
+      .filter((m) => !m.error && m.content.trim())
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    let pending: Partial<ChatMessage> = {};
+    let frame = 0;
+    const msg: ChatMessage = { ...assistant };
+    const flush = () => {
+      frame = 0;
+      Object.assign(msg, pending);
+      pending = {};
+      current = {
+        ...current,
+        messages: current.messages.map((m) => (m.id === msg.id ? { ...msg } : m)),
+      };
+      if (activeIdRef.current === current.id) setSession(current);
+    };
+    const update = (patch: Partial<ChatMessage>, immediate = false) => {
+      pending = { ...pending, ...patch };
+      if (immediate) {
+        if (frame) cancelAnimationFrame(frame);
+        flush();
+      } else if (!frame) frame = requestAnimationFrame(flush);
+    };
+    let text = "";
+    let reasoning = "";
+
+    const onEvent = (e: StreamEvent) => {
+      switch (e.type) {
+        case "meta":
+          update({ model: e.model, provider: e.provider }, true);
+          break;
+        case "notice":
+          update({ notices: [...(msg.notices ?? []), ...(pending.notices ?? []), e.message].filter((v, i, a) => a.indexOf(v) === i) }, true);
+          break;
+        case "sources":
+          update({ sources: e.sources }, true);
+          break;
+        case "summary":
+          current = { ...current, summary: e.summary, summarizedCount: summarized + e.folded };
+          break;
+        case "delta":
+          text += e.text;
+          update({ content: text });
+          break;
+        case "reasoning":
+          reasoning += e.text;
+          update({ reasoning });
+          break;
+        case "progress":
+          setProgress({ files: e.files, chars: e.chars });
+          break;
+        case "project":
+          update({ project: e.files }, true);
+          setOpenProjectId(msg.id);
+          break;
+        case "usage":
+          recordUsage(msg.model ?? target.id, e.promptTokens, e.completionTokens);
+          checkQuota(e, msg.model ?? target.id);
+          break;
+        case "error":
+          update({ error: e.message }, true);
+          break;
+      }
+    };
+
+    try {
+      await streamChat(
+        {
+          provider: target.provider,
+          model: target.id,
+          mode,
+          project: mode === "code" && project,
+          search: search || mode === "research",
+          summary: base.summary,
+          messages: history,
+        },
+        onEvent,
+        ctrl.signal,
+      );
+    } catch (err) {
+      if (!ctrl.signal.aborted) {
+        const m = err instanceof ChatHttpError || err instanceof Error ? err.message : "Something went wrong.";
+        update({ error: m }, true);
+      }
+    } finally {
+      if (frame) cancelAnimationFrame(frame);
+      flush();
+      if (ctrl.signal.aborted && !msg.content && !msg.project) {
+        current = { ...current, messages: current.messages.filter((m) => m.id !== msg.id) };
+      }
+      current = { ...current, updatedAt: Date.now() };
+      if (activeIdRef.current === current.id) setSession(current);
+      persist(current);
+      setBusy(false);
+      setStreamingId(null);
+      setProgress(null);
+      if (abortRef.current === ctrl) abortRef.current = null;
+    }
   };
 
-  const QUOTA = 100_000;
-  const usedTokens = usage.totalTokens;
-  const remainingTokens = Math.max(QUOTA - usedTokens, 0);
-  const usedPct = Math.min((usedTokens / QUOTA) * 100, 100);
+  const send = () => {
+    const text = input.trim();
+    if (!text || busy) return;
+    setInput("");
+    if (!session.messages.length) setParams({ s: session.id }, { replace: true });
+    run(session, text);
+  };
 
-  return (
-    <Layout hideFooter>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex-1 w-full flex flex-col py-2 sm:py-4 overflow-hidden">
-        <div className="flex flex-col lg:flex-row items-stretch gap-6 h-full min-h-0">
-          {/* ── Chat Workspace ── */}
-          <div className="flex-1 flex flex-col gap-4 min-h-0 min-w-0 relative">
-            <div className="absolute -top-20 -left-20 -right-20 h-40 bg-mira-purple/5 blur-[100px] pointer-events-none" />
-            <div className="flex items-center justify-between px-2 shrink-0">
-              <div className="flex items-center gap-4">
-                <h1 className="text-lg font-bold tracking-tight text-foreground truncate max-w-[120px] sm:max-w-[300px]">
-                  {session.title}
-                </h1>
-                <div className="h-7 bg-muted/50 px-4 flex items-center rounded-full">
-                  <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-mira-purple font-bold">
-                    Neural Workspace
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {isMobile && (
-                  <Sheet>
-                    <SheetTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 text-xs rounded-lg">
-                        <Activity className="size-4 mr-1.5" /> Stats
-                      </Button>
-                    </SheetTrigger>
-                    <SheetContent side="right" className="w-[300px] p-0 border-l-border/40 bg-background/95 backdrop-blur-xl">
-                      <div className="h-full overflow-y-auto p-6">
-                        <TelemetryContent usedTokens={usedTokens} remainingTokens={remainingTokens} usedPct={usedPct} QUOTA={QUOTA} />
-                      </div>
-                    </SheetContent>
-                  </Sheet>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={newChat}
-                  className="h-8 text-xs rounded-lg"
-                >
-                  <Plus className="size-4 mr-1.5" /> New Session
-                </Button>
-                {!isMobile && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={exportChat}
-                    className="h-8 text-xs rounded-lg"
-                  >
-                    <Download className="size-4 mr-1.5" /> Export
-                  </Button>
-                )}
-              </div>
-            </div>
+  const regenerate = () => {
+    if (busy) return;
+    const msgs = session.messages;
+    const lastAssistant = msgs.length && msgs[msgs.length - 1].role === "assistant" ? msgs.length - 1 : msgs.length;
+    run({ ...session, messages: msgs.slice(0, lastAssistant) }, null);
+  };
 
-            <div className="bg-card border border-border rounded-[2.5rem] overflow-hidden flex flex-col flex-1 relative shadow-sm min-h-0">
-              <TrafficLights label={`${model.name} // MIRA Interface`} />
+  const stop = () => abortRef.current?.abort();
 
-              <div
-                ref={scrollRef}
-                className="flex-1 overflow-y-auto p-4 sm:p-10 space-y-12 custom-scrollbar"
-              >
-                {session.messages.length === 0 ? (
-                  <EmptyState onPick={(p) => setInput(p)} />
-                ) : (
-                  session.messages
-                    .filter(
-                      (m) => m.content !== "" || m.role === "user"
-                    )
-                    .map((m) => <Message key={m.id} m={m} />)
-                )}
-                {busy && (
-                  <div className="flex flex-col items-start gap-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <div className="flex flex-col items-center gap-2 px-2">
-                      <div className="relative size-6">
-                        <div className="absolute inset-0 rounded-full border-[3px] border-t-mira-purple border-r-mira-cyan border-b-mira-pink border-l-mira-blue animate-spin" />
-                      </div>
-                      <span className="text-[10px] font-mono font-bold text-foreground/40 uppercase tracking-[0.4em]">
-                        MIRA Thinking
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
+  const openProject = session.messages.find((m) => m.id === openProjectId)?.project;
+  const lastId = session.messages[session.messages.length - 1]?.id;
 
-              <div className="p-4 sm:p-8 border-t border-border bg-muted/10 shrink-0">
-                <div className="max-w-4xl mx-auto">
-                  <div className="bg-card border border-border rounded-3xl overflow-hidden flex flex-col shadow-sm focus-within:border-mira-purple/50 transition-all duration-200">
-                    <textarea
-                      value={input}
-                      onChange={(e) => setInput(e.target.value)}
-                      onKeyDown={(e) =>
-                        e.key === "Enter" &&
-                        !e.shiftKey &&
-                        (e.preventDefault(), send())
-                      }
-                      placeholder="Ask MIRA anything..."
-                      className="w-full bg-transparent px-6 py-4 text-base text-foreground outline-none min-h-[50px] max-h-[120px] resize-none placeholder:text-muted-foreground/60 font-light"
-                      rows={1}
-                    />
-                      <div className="flex items-center gap-2 px-4 pb-3">
-                        <Select value={modelId} onValueChange={setModelId}>
-                          <SelectTrigger className="w-auto h-7 bg-muted border-none text-[10px] font-mono uppercase tracking-widest px-4 rounded-xl">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {displayModels.map((m) => (
-                              <SelectItem
-                                key={m.id}
-                                value={m.id}
-                                className="text-xs uppercase font-mono tracking-tighter"
-                              >
-                                {m.name}
-                                {m.badge ? ` · ${m.badge}` : ""}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSearchEnabled(!searchEnabled)}
-                          className={cn(
-                            "h-7 px-3 rounded-xl text-[10px] font-mono uppercase tracking-widest transition-all",
-                            searchEnabled 
-                              ? "bg-mira-purple/10 text-mira-purple hover:bg-mira-purple/20" 
-                              : "text-muted-foreground hover:bg-muted"
-                          )}
-                        >
-                          <Globe className={cn("size-3 mr-1.5", searchEnabled && "animate-pulse")} />
-                          Search {searchEnabled ? "On" : "Off"}
-                        </Button>
-
-                        <div className="flex-1" />
-
-                        <Button
-                          onClick={send}
-                          disabled={busy || !input.trim()}
-                          size="icon"
-                          className="btn-mira size-9 rounded-xl"
-                        >
-                          <Send className="size-4" />
-                        </Button>
-                      </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* COLORFUL TELEMETRY SIDEBAR - Hidden on mobile, shown in Sheet */}
-          {!isMobile && (
-            <div className="w-full lg:w-[320px] shrink-0 min-h-0 flex flex-col">
-              <div className="glass-panel p-8 rounded-[2.5rem] flex flex-col gap-8 flex-1 border-border/40 dark:border-white/5 bg-card/10 dark:bg-white/[0.01]">
-                <TelemetryContent usedTokens={usedTokens} remainingTokens={remainingTokens} usedPct={usedPct} QUOTA={QUOTA} />
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </Layout>
+  const sidebar = (
+    <ChatSidebar
+      sessions={sessions}
+      activeId={session.id}
+      onSelect={openSession}
+      onNew={newChat}
+      onDelete={removeSession}
+      userName={user?.name}
+      onLogout={async () => {
+        abortRef.current?.abort();
+        await logout();
+        navigate("/");
+      }}
+    />
   );
-};
 
-// ── Telemetry Content Component ────────────────────────────────────────────────
-const TelemetryContent = ({ usedTokens, remainingTokens, usedPct, QUOTA }: { usedTokens: number; remainingTokens: number; usedPct: number; QUOTA: number }) => (
-  <>
-    <div className="flex items-center gap-3 px-2">
-      <div className="size-2 bg-mira-purple rounded-full animate-ping" />
-      <span className="text-[11px] font-mono uppercase tracking-[0.4em] text-foreground dark:text-muted-foreground/60 font-bold">
-        Telemetry Core
-      </span>
-    </div>
-
-    <div className="grid grid-cols-1 gap-4">
-      {/* USED TOKENS - VIBRANT CYAN/BLUE */}
-      <div className="relative group overflow-hidden bg-gradient-to-br from-mira-cyan/20 to-mira-blue/20 border border-mira-cyan/20 rounded-2xl p-5 transition-all duration-500 hover:scale-[1.02] shadow-sm">
-        <div className="absolute -right-4 -top-4 size-24 bg-mira-cyan/10 blur-2xl rounded-full" />
-        <div className="flex items-center gap-2 mb-3">
-          <Activity className="size-3.5 text-mira-cyan" />
-          <span className="text-[9px] font-mono uppercase tracking-widest text-mira-cyan font-bold">
-            Neural Used
-          </span>
-        </div>
-        <div className="text-2xl font-bold tabular-nums tracking-tighter text-foreground dark:text-white drop-shadow-sm">
-          {usedTokens.toLocaleString()}
-          <span className="text-[10px] font-mono text-muted-foreground dark:text-white/30 ml-1.5 uppercase">
-            tokens
-          </span>
-        </div>
-      </div>
-
-      {/* REMAINING - VIBRANT PINK/PURPLE */}
-      <div className="relative group overflow-hidden bg-gradient-to-br from-mira-pink/20 to-mira-purple/20 border border-mira-pink/20 rounded-2xl p-5 transition-all duration-500 hover:scale-[1.02] shadow-sm">
-        <div className="absolute -right-4 -top-4 size-24 bg-mira-pink/10 blur-2xl rounded-full" />
-        <div className="flex items-center gap-2 mb-3">
-          <Zap className="size-3.5 text-mira-pink" />
-          <span className="text-[9px] font-mono uppercase tracking-widest text-mira-pink font-bold">
-            Available
-          </span>
-        </div>
-        <div className="text-2xl font-bold tabular-nums tracking-tighter text-foreground dark:text-white drop-shadow-sm">
-          {remainingTokens.toLocaleString()}
-          <span className="text-[10px] font-mono text-muted-foreground dark:text-white/30 ml-1.5 uppercase">
-            tokens
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <div className="space-y-3 px-2">
-      <div className="flex items-center justify-between">
-        <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground/40 font-bold">
-          System Load
-        </span>
-        <span className="text-[9px] font-mono text-mira-purple font-bold">
-          {usedPct.toFixed(2)}%
-        </span>
-      </div>
-      <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden p-[1px] border border-white/5">
-        <div
-          className="h-full bg-gradient-to-r from-mira-blue via-mira-purple to-mira-pink rounded-full transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(168,85,247,0.5)]"
-          style={{ width: `${usedPct}%` }}
-        />
-      </div>
-      <div className="flex justify-between text-[8px] font-mono text-muted-foreground/30 font-bold uppercase tracking-widest">
-        <span>Zero</span>
-        <span>{QUOTA.toLocaleString()} Max</span>
-      </div>
-    </div>
-
-    <div className="h-px bg-white/5" />
-
-    <div className="space-y-3 px-2">
-      <MetaLine icon={ShieldCheck} label="Identity" value="Secured" color="text-emerald-500" />
-      <MetaLine icon={Hash} label="Protocol" value="Quantum" color="text-mira-cyan" />
-      <MetaLine icon={Lock} label="Storage" value="AES-256" color="text-mira-pink" />
-    </div>
-
-    <div className="mt-auto p-5 rounded-2xl bg-gradient-to-b from-white/[0.03] to-transparent border border-white/5 space-y-2">
-      <div className="flex items-center gap-2 text-[9px] font-mono text-mira-purple uppercase tracking-[0.2em] font-black">
-        <ShieldCheck className="size-3 text-emerald-500 shadow-emerald-500/50" /> 
-        Privacy Shield
-      </div>
-      <p className="text-[9px] text-muted-foreground/50 leading-relaxed font-medium">
-        Your neural sessions are localized and encrypted. MIRA ensures zero remote data retention.
-      </p>
-    </div>
-  </>
-);
-
-// ── Glow letter effect ────────────────────────────────────────────────────────
-const GlowLetter = ({ letter }: { letter: string }) => (
-  <span
-    className="inline-block cursor-default"
-    style={{ transition: "color 0.3s ease, text-shadow 0.3s ease, transform 0.3s ease" }}
-    onMouseEnter={(e) => {
-      const el = e.currentTarget;
-      el.style.color = "hsl(260, 80%, 75%)";
-      el.style.textShadow = `
-        0 0 8px hsl(260 80% 70% / 0.9),
-        0 0 20px hsl(260 70% 65% / 0.7),
-        0 0 40px hsl(255 70% 60% / 0.5),
-        0 0 80px hsl(255 60% 55% / 0.3)
-      `;
-      el.style.transform = "translateY(-2px) scale(1.12)";
-      const parent = el.parentElement;
-      if (!parent) return;
-      const siblings = Array.from(parent.children) as HTMLElement[];
-      const idx = siblings.indexOf(el);
-      const applyNeighbor = (offset: number, intensity: number) => {
-        const neighbor = siblings[idx + offset];
-        if (!neighbor) return;
-        neighbor.style.color = `hsl(260, 70%, ${60 + intensity * 10}%)`;
-        neighbor.style.textShadow = `0 0 ${6 * intensity}px hsl(260 70% 65% / ${0.5 * intensity}), 0 0 ${16 * intensity}px hsl(255 60% 60% / ${0.3 * intensity})`;
-        neighbor.style.transform = `translateY(${-1 * intensity}px) scale(${1 + 0.03 * intensity})`;
-      };
-      applyNeighbor(-2, 0.3);
-      applyNeighbor(-1, 0.6);
-      applyNeighbor(1, 0.6);
-      applyNeighbor(2, 0.3);
-    }}
-    onMouseLeave={(e) => {
-      const el = e.currentTarget;
-      el.style.color = "";
-      el.style.textShadow = "";
-      el.style.transform = "";
-      const parent = el.parentElement;
-      if (!parent) return;
-      const siblings = Array.from(parent.children) as HTMLElement[];
-      const idx = siblings.indexOf(el);
-      [-2, -1, 1, 2].forEach((offset) => {
-        const neighbor = siblings[idx + offset];
-        if (!neighbor) return;
-        neighbor.style.color = "";
-        neighbor.style.textShadow = "";
-        neighbor.style.transform = "";
-      });
-    }}
-  >
-    {letter}
-  </span>
-);
-
-// ── Empty state ───────────────────────────────────────────────────────────────
-const EmptyState = ({ onPick }: { onPick: (p: string) => void }) => {
-  const samples = [
-    {
-      title: "Code",
-      desc: "Review and refactor my React component for performance.",
-      sub: "Engineering",
-    },
-    {
-      title: "Research",
-      desc: "Summarize the latest breakthroughs in multimodal AI.",
-      sub: "Analysis",
-    },
-    {
-      title: "Reason",
-      desc: "Compare Gemini Flash vs Pro for long-context tasks.",
-      sub: "Evaluation",
-    },
-  ];
   return (
-    <div className="flex flex-col items-center justify-center min-h-full text-center py-10 px-4">
-      <div className="size-16 rounded-2xl bg-mira-purple/5 border border-mira-purple/10 flex items-center justify-center mb-8">
-        <Brain className="size-8 text-mira-purple" />
-      </div>
+    <div className="mira-app flex h-dvh w-full overflow-hidden bg-background text-foreground">
+      <aside className="hidden md:block w-64 shrink-0 border-r border-border">{sidebar}</aside>
+      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+        <SheetContent side="left" className="mira-app w-72 p-0 border-r border-border bg-sidebar [&>button]:hidden">
+          <SheetTitle className="sr-only">Chats</SheetTitle>
+          {sidebar}
+        </SheetContent>
+      </Sheet>
 
-      <h2 className="text-3xl font-bold tracking-tight text-foreground mb-4">
-        {"MIRA".split("").map((l, i) => (
-          <GlowLetter key={i} letter={l} />
-        ))}
-      </h2>
-
-      <p className="text-muted-foreground/60 max-w-sm mb-2 text-sm font-light">
-        Our personalized superfast AI to help you.
-      </p>
-      <p className="text-muted-foreground/40 max-w-sm mb-12 text-xs font-mono uppercase tracking-widest">
-        Switch models · preserve context · think deeper
-      </p>
-
-      <div className="grid sm:grid-cols-3 gap-4 w-full max-w-4xl">
-        {samples.map((s) => (
+      <main className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 items-center gap-1 px-2 sm:px-4 shrink-0">
           <button
-            key={s.title}
-            onClick={() => onPick(s.desc)}
-            className="text-left p-6 rounded-2xl bg-card border border-border hover:border-mira-purple/30 hover:bg-muted/30 transition-all group shadow-sm relative overflow-hidden"
+            type="button"
+            className="md:hidden rounded-md p-2 text-muted-foreground hover:bg-accent"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open chats"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-mira-purple/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className="relative z-10">
-              <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-mira-purple mb-3 font-bold">
-                {s.title}
-              </div>
-              <div className="text-sm font-semibold text-foreground mb-2 group-hover:text-mira-purple transition-colors leading-snug">
-                {s.desc}
-              </div>
-              <div className="text-[10px] text-muted-foreground/60 font-medium">
-                {s.sub}
-              </div>
-            </div>
+            <Menu className="size-5" />
           </button>
-        ))}
-      </div>
+          <ModelPicker
+            data={models.data ?? null}
+            loading={models.isLoading}
+            error={models.error ? String((models.error as Error).message) : null}
+            value={effectiveModel}
+            onChange={chooseModel}
+          />
+          <div className="flex-1" />
+          <button
+            type="button"
+            className="md:hidden rounded-md p-2 text-muted-foreground hover:bg-accent"
+            onClick={newChat}
+            aria-label="New chat"
+          >
+            <SquarePen className="size-5" />
+          </button>
+        </header>
+
+        <div
+          ref={scrollRef}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          }}
+          className="min-h-0 flex-1 overflow-y-auto"
+        >
+          <div className="mx-auto w-full max-w-3xl px-4 sm:px-6">
+            {session.messages.length === 0 ? (
+              <div className="flex min-h-[55vh] flex-col justify-center py-10">
+                <h1 className="text-2xl font-semibold tracking-tight">What can I help with?</h1>
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  Answers include live web results. Switch models or modes at any time.
+                </p>
+                <div className="mt-6 grid gap-2 sm:grid-cols-2">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s.text}
+                      type="button"
+                      onClick={() => {
+                        setMode(s.mode);
+                        setInput(s.text);
+                      }}
+                      className="rounded-lg border border-border px-3.5 py-3 text-left text-sm text-foreground/85 hover:bg-accent transition-colors"
+                    >
+                      <span className="block text-xs text-muted-foreground mb-0.5 capitalize">{s.mode}</span>
+                      {s.text}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-8 py-6">
+                {session.messages.map((m) => (
+                  <MessageView
+                    key={m.id}
+                    m={m}
+                    streaming={m.id === streamingId}
+                    progress={m.id === streamingId ? progress : null}
+                    isLast={m.id === lastId && m.role === "assistant"}
+                    onRegenerate={regenerate}
+                    onOpenProject={() => setOpenProjectId(m.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="shrink-0 px-3 pb-3 sm:px-6 sm:pb-5">
+          <div className="mx-auto w-full max-w-3xl">
+            {warning && (
+              <div className="mb-2 flex items-start gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                <span className="flex-1">{warning}</span>
+                <button type="button" onClick={() => setWarning(null)} aria-label="Dismiss">
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
+            <Composer
+              value={input}
+              onChange={setInput}
+              onSend={send}
+              onStop={stop}
+              busy={busy}
+              disabled={!effectiveModel}
+              mode={mode}
+              onMode={setMode}
+              project={project}
+              onProject={setProject}
+              search={search}
+              onSearch={setSearch}
+            />
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              Mira can make mistakes. Check important information.
+            </p>
+          </div>
+        </div>
+      </main>
+
+      {openProject && (
+        <section
+          className="fixed inset-0 z-40 lg:static lg:z-auto lg:w-[46%] lg:max-w-[760px] lg:shrink-0 lg:border-l lg:border-border"
+          aria-label="Generated project"
+        >
+          <ProjectPanel key={openProjectId} files={openProject} onClose={() => setOpenProjectId(null)} />
+        </section>
+      )}
     </div>
   );
-};
-
-// ── Message bubble ────────────────────────────────────────────────────────────
-const Message = ({ m }: { m: ChatMessage }) => (
-  <div
-    className={cn(
-      "flex gap-6 min-w-0 max-w-full",
-      m.role === "user" ? "flex-row-reverse" : "flex-row"
-    )}
-  >
-    <div
-      className={cn(
-        "size-9 rounded-xl shrink-0 flex items-center justify-center shadow-sm",
-        m.role === "user"
-          ? "bg-muted border border-border"
-          : "bg-mira-purple text-white"
-      )}
-    >
-      {m.role === "user" ? (
-        <UserIcon className="size-4" />
-      ) : (
-        <Sparkles className="size-4" />
-      )}
-    </div>
-    <div
-      className={cn(
-        "flex-1 min-w-0 max-w-full space-y-2",
-        m.role === "user" ? "text-right" : "text-left"
-      )}
-    >
-      <div className="text-[10px] font-mono uppercase tracking-[0.3em] text-muted-foreground/60 font-bold">
-        {m.role === "user" ? "You" : "MIRA"} //{" "}
-        {new Date(m.createdAt).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}
-      </div>
-      <div
-        className={cn(
-          "inline-block rounded-2xl px-6 py-4 max-w-full sm:max-w-[90%] text-left relative overflow-x-auto",
-          m.role === "user"
-            ? "bg-muted/50 border border-border text-foreground"
-            : "bg-transparent border-none p-0"
-        )}
-      >
-        <div className="prose prose-sm dark:prose-invert max-w-full prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:text-mira-purple font-normal text-foreground overflow-wrap-anywhere dark:text-foreground/90">
-          <ReactMarkdown>{m.content}</ReactMarkdown>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-// ── Sidebar meta line ─────────────────────────────────────────────────────────
-const MetaLine = ({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color?: string }) => (
-  <div className="flex justify-between items-center text-[10px] font-mono group">
-    <div className="flex items-center gap-2">
-      <Icon className={cn("size-3 text-muted-foreground/40 transition-colors", color)} />
-      <span className="text-muted-foreground/50 uppercase tracking-widest group-hover:text-muted-foreground/70 transition-colors font-bold">
-        {label}
-      </span>
-    </div>
-    <span className="text-foreground/80 font-bold tracking-tight">
-      {value}
-    </span>
-  </div>
-);
-
-export default AI;
+}
