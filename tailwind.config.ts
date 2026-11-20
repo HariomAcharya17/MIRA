@@ -57,21 +57,11 @@ export default {
         },
         sidebar: "hsl(var(--sidebar))",
         "code-bg": "hsl(var(--code-bg))",
-        mira: {
-          blue: "hsl(var(--mira-blue))",
-          purple: "hsl(var(--mira-purple))",
-          pink: "hsl(var(--mira-pink))",
-          cyan: "hsl(var(--mira-cyan))",
-        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
-      },
-      backgroundImage: {
-        "gradient-mira": "var(--gradient-mira)",
-        "gradient-glow": "var(--gradient-glow)",
       },
       keyframes: {
         "accordion-down": {

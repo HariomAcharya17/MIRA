@@ -29,7 +29,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         JSON.stringify([
           {
             id: "mira-operator-default",
-            name: "Default Operator",
+            name: "Demo User",
             email: "admin@mira.io",
             password: "password",
           },
@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (session?.user) {
             setUser({
               id: session.user.id,
-              name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || "Operator",
+              name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || "User",
               email: session.user.email || "",
             });
           }
@@ -77,7 +77,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (session?.user) {
               setUser({
                 id: session.user.id,
-                name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || "Operator",
+                name: session.user.user_metadata.full_name || session.user.email?.split('@')[0] || "User",
                 email: session.user.email || "",
               });
             } else {
@@ -137,10 +137,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const matched = users.find((u) => u.email.toLowerCase() === cleanEmail);
 
       if (!matched) {
-        throw new Error("Operator identity signature not found. Please register first.");
+        throw new Error("No account found for this email. Create one first.");
       }
       if (matched.password !== password) {
-        throw new Error("Invalid cipher key signature.");
+        throw new Error("Incorrect email or password.");
       }
 
       const loggedUser = {
@@ -170,7 +170,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       const exists = users.some((u) => u.email.toLowerCase() === cleanEmail);
       if (exists) {
-        throw new Error("This email is already linked to a neural signature.");
+        throw new Error("An account with this email already exists.");
       }
 
       const newUser = {
@@ -223,7 +223,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const matched = users.find((u) => u.email.toLowerCase() === cleanEmail);
 
       if (!matched) {
-        throw new Error("No neural signature found for this email address.");
+        throw new Error("No account found for this email address.");
       }
       
       // In mock mode, we'll reset the user's password to 'password' for testing purposes

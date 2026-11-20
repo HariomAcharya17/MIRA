@@ -1,14 +1,16 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Layout } from "@/components/layout/Layout";
-import { TrafficLights } from "@/components/TrafficLights";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, MessageSquare, Search } from "lucide-react";
 import { ChatSession, clearSessions, deleteSession, getSessions } from "@/lib/store";
 import { deleteAllRemoteSessions, deleteRemoteSession } from "@/lib/chat-sync";
-import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+
+const formatDate = (ts: number) =>
+  new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
 const HistoryPage = () => {
   const { user, isMock } = useAuth();
@@ -16,146 +18,107 @@ const HistoryPage = () => {
   const remote = Boolean(user && !isMock);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState<ChatSession | null>(null);
 
-  // Re-fetch sessions whenever the logged-in user changes
+  // Re-read sessions whenever the signed-in user changes (storage is per user).
   useEffect(() => {
-    if (!user) {
-      setSessions([]);
-      setOpen(null);
-      return;
-    }
-    setSessions(getSessions());
+    setSessions(user ? getSessions() : []);
   }, [user]);
 
-  // Old sessions may reference retired models; show them anyway.
-  const q = query.toLowerCase();
-  const filtered = sessions.filter(
-    (s) => s.title.toLowerCase().includes(q) || s.messages.some((m) => m.content.toLowerCase().includes(q)),
-  );
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? sessions.filter(
+        (s) => s.title.toLowerCase().includes(q) || s.messages.some((m) => m.content.toLowerCase().includes(q)),
+      )
+    : sessions;
 
   const remove = (id: string) => {
-    if (!confirm("Decommission this log entry?")) return;
+    if (!confirm("Delete this chat? This can't be undone.")) return;
     deleteSession(id);
     if (remote) deleteRemoteSession(id).catch(() => {});
     setSessions(getSessions());
-    if (open?.id === id) setOpen(null);
-    toast.success("Entry decommissioned.");
+    toast.success("Chat deleted.");
   };
 
   const clearAll = () => {
-    if (!confirm("Wipe all telemetry logs? This action is irreversible.")) return;
-    clearSessions(); // sessions are stored under a per-user key
+    if (!confirm("Delete all chats? This can't be undone.")) return;
+    clearSessions();
     if (remote) deleteAllRemoteSessions().catch(() => {});
     setSessions([]);
-    setOpen(null);
-    toast.success("Telemetry logs wiped.");
+    toast.success("All chats deleted.");
   };
+
+  const open = (id: string) => navigate(`/ai?s=${encodeURIComponent(id)}`);
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-6 mb-10">
+      <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-mira-purple mb-2 flex items-center gap-2">
-              <span className="size-1 bg-mira-purple rounded-full animate-pulse" />
-              Neural Log Archive
-            </div>
-            <h1 className="text-4xl font-semibold tracking-tighter">Session History</h1>
-            <p className="text-sm text-muted-foreground mt-2 font-light">
-              {sessions.length} recorded transmissions found in local cache.
+            <h1 className="text-2xl font-semibold tracking-tight">History</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {sessions.length} {sessions.length === 1 ? "chat" : "chats"}
             </p>
           </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search telemetry..."
-                className="pl-9 h-10 bg-white/[0.02] border-white/5 focus:border-mira-purple/30 transition-all text-xs"
-              />
-            </div>
-            {sessions.length > 0 && (
-              <Button variant="outline" onClick={clearAll} className="h-10 gap-2 border-white/10 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-all">
-                <Trash2 className="size-3.5" /> <span className="hidden sm:inline">Wipe Logs</span>
-              </Button>
-            )}
-          </div>
+          {sessions.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearAll} className="text-muted-foreground hover:text-destructive self-start sm:self-auto">
+              Delete all
+            </Button>
+          )}
         </div>
 
-        {sessions.length === 0 ? (
-          <div className="glass-panel rounded-2xl p-16 text-center border-white/5 border-dashed">
-            <div className="size-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-6">
-              <MessageSquare className="size-8 text-muted-foreground opacity-20" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">Archive Empty</h3>
-            <p className="text-sm text-muted-foreground max-w-xs mx-auto font-light">No neural transmissions have been logged. Initialize your first session to begin indexing.</p>
-            <Button variant="outline" className="mt-8 border-white/10" asChild>
-              <a href="/ai">Initialize Session</a>
-            </Button>
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filtered.map((s, i) => {
-              return (
-                <div
-                  key={s.id}
-                  className="glass-panel rounded-2xl overflow-hidden cursor-pointer group hover:border-mira-purple/30 transition-all duration-500 animate-in fade-in slide-in-from-bottom-4"
-                  style={{ animationDelay: `${i * 0.05}s` }}
-                  onClick={() => setOpen(s)}
-                >
-                  <TrafficLights label={s.model || "Chat"} />
-                  <div className="p-6">
-                    <h3 className="font-semibold mb-2 line-clamp-1 group-hover:text-mira-purple transition-colors">{s.title}</h3>
-                    <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground uppercase tracking-widest mb-4">
-                      <span>{new Date(s.updatedAt).toLocaleDateString()}</span>
-                      <span className="size-1 bg-white/20 rounded-full" />
-                      <span>{s.messages.length} Units</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed font-light mb-6 opacity-60 group-hover:opacity-100 transition-opacity">
-                      {s.messages[s.messages.length - 1]?.content ?? "No telemetry data recorded."}
-                    </p>
-                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                      <span className="text-[9px] font-mono uppercase text-mira-cyan">Verified Log</span>
-                      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); remove(s.id); }} className="size-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10">
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+        {sessions.length > 0 && (
+          <div className="relative mt-6">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search chats"
+              aria-label="Search chats"
+              className="pl-9"
+            />
           </div>
         )}
 
-        {open && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" onClick={() => setOpen(null)}>
-            <div className="absolute inset-0 bg-background/80 backdrop-blur-xl animate-in fade-in duration-500" />
-            <div className="relative glass-panel rounded-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col border-white/10 shadow-2xl animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
-              <TrafficLights label={open.title} />
-              <div className="overflow-y-auto p-8 sm:p-10 space-y-8 custom-scrollbar">
-                {open.messages.map((m) => (
-                  <div key={m.id} className="space-y-3">
-                    <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-mira-purple flex items-center gap-2">
-                      <span className="size-1 bg-mira-purple rounded-full" />
-                      {m.role === "user" ? "Operator" : "Neural Link"}
-                    </div>
-                    <div className="text-sm font-light leading-relaxed text-foreground/90 bg-white/[0.02] p-5 rounded-xl border border-white/5 whitespace-pre-wrap">
-                      {m.content}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="border-t border-white/5 p-4 bg-white/[0.01] flex justify-between items-center">
-                <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest ml-4">End of Transmission</span>
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => navigate(`/ai?s=${encodeURIComponent(open.id)}`)} className="px-4">Open in chat</Button>
-                  <Button variant="outline" size="sm" onClick={() => setOpen(null)} className="border-white/10 px-6">Close</Button>
-                </div>
-              </div>
-            </div>
+        {sessions.length === 0 ? (
+          <div className="mt-10 rounded-lg border border-dashed border-border px-6 py-14 text-center">
+            <p className="font-medium">No chats yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">Conversations you start will show up here.</p>
+            <Button asChild className="mt-6">
+              <Link to="/ai">Start a chat</Link>
+            </Button>
           </div>
+        ) : filtered.length === 0 ? (
+          <p className="mt-10 text-sm text-muted-foreground text-center">No chats match "{query}".</p>
+        ) : (
+          <ul className="mt-4 divide-y divide-border border-y border-border">
+            {filtered.map((s) => {
+              const last = [...s.messages].reverse().find((m) => m.role === "assistant") ?? s.messages[s.messages.length - 1];
+              return (
+                <li key={s.id} className="group flex items-start gap-3">
+                  <button onClick={() => open(s.id)} className="flex-1 min-w-0 text-left py-4 px-1 hover:bg-accent/50 rounded-md transition-colors">
+                    <div className="flex items-baseline justify-between gap-4">
+                      <span className="font-medium truncate">{s.title}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{formatDate(s.updatedAt)}</span>
+                    </div>
+                    {last && <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{last.content}</p>}
+                    <div className="mt-1.5 text-xs text-muted-foreground">
+                      {s.messages.length} {s.messages.length === 1 ? "message" : "messages"}
+                      {s.model ? ` · ${s.model}` : ""}
+                    </div>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => remove(s.id)}
+                    aria-label={`Delete "${s.title}"`}
+                    className="mt-3 size-8 text-muted-foreground hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
     </Layout>

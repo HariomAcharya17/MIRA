@@ -1,164 +1,164 @@
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { useState } from "react";
-import { Moon, Sun, Menu, X, Sparkles, History, Download, User as UserIcon, MessageSquare, LogOut } from "lucide-react";
+import { Moon, Sun, Menu, X, LogOut } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 
-const navItems = [
-  { label: "Home", to: "/#home", section: "home" },
-  { label: "Features", to: "/#features", section: "features" },
-  { label: "Contact", to: "/#contact", section: "contact" },
+const sectionLinks = [
+  { label: "Features", hash: "features" },
+  { label: "Contact", hash: "contact" },
 ];
 
+const appLinks = [
+  { label: "Chat", to: "/ai" },
+  { label: "History", to: "/history" },
+  { label: "Downloads", to: "/downloads" },
+];
 
 export const Header = () => {
   const { theme, toggleTheme } = useTheme();
-  const { user, logout, isMock } = useAuth();
+  const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
 
-  const handleAnchor = (e: React.MouseEvent, to: string) => {
-    if (!to.includes("#")) return;
-    
-    const [path, hash] = to.split("#");
+  const scrollTo = (e: React.MouseEvent, hash: string) => {
     setOpen(false);
-
-    if (location.pathname !== path && path !== "") {
-      // If we are not on the target page, let the default navigation happen
-      // or manually navigate if we want to force it.
-      // But we want to prevent default if we're doing smooth scroll on the same page.
-      return; 
-    }
-
+    if (location.pathname !== "/") return; // let the router navigate to /#hash
     e.preventDefault();
-    const element = document.getElementById(hash);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth" });
-    } else if (path === "/" || path === "") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    document.getElementById(hash)?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleLogoClick = (e: React.MouseEvent) => {
-    if (location.pathname === "/") {
-      e.preventDefault();
-      document.getElementById("chat-cta")?.scrollIntoView({ behavior: "smooth" });
-    }
-  };
+  const navClass = ({ isActive }: { isActive: boolean }) =>
+    cn(
+      "px-3 py-1.5 rounded-md text-sm transition-colors",
+      isActive ? "text-foreground bg-accent" : "text-muted-foreground hover:text-foreground",
+    );
 
   return (
-    <header className="fixed top-0 inset-x-0 z-50 border-b border-border/40 bg-background/70 backdrop-blur-xl lightning-border-bottom">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <Link to="/" onClick={handleLogoClick} className="flex items-center gap-2 group">
-            <div className="size-2.5 rounded-full bg-gradient-mira shadow-[0_0_12px_hsl(var(--mira-purple)/0.6)] group-hover:scale-125 transition-transform" />
-            <span className="text-lg font-bold tracking-tight">MIRA</span>
+    <header className="fixed top-0 inset-x-0 z-50 h-14 border-b border-border bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+      <div className="max-w-6xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-6">
+          <Link to="/" className="flex items-center gap-2" aria-label="Mira home">
+            <Logo />
+            <span className="font-semibold tracking-tight">Mira</span>
           </Link>
-          <nav className="hidden lg:flex items-center gap-7">
-            {navItems.map((item) => (
+          <nav className="hidden md:flex items-center gap-1">
+            {sectionLinks.map((l) => (
               <Link
-                key={item.to}
-                to={item.to}
-                onClick={(e) => handleAnchor(e, item.to)}
-                className="text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors uppercase tracking-wide cursor-pointer"
+                key={l.hash}
+                to={`/#${l.hash}`}
+                onClick={(e) => scrollTo(e, l.hash)}
+                className="px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                {item.label}
+                {l.label}
               </Link>
+            ))}
+            {user && appLinks.map((l) => (
+              <NavLink key={l.to} to={l.to} className={navClass}>
+                {l.label}
+              </NavLink>
             ))}
           </nav>
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-2">
-          {/* Icon nav */}
-          <div className="hidden sm:flex items-center gap-1 mr-1">
-            <IconLink to="/ai" label="AI Chat" icon={<MessageSquare className="size-4" />} />
-            <IconLink to="/history" label="History" icon={<History className="size-4" />} />
-            <IconLink to="/downloads" label="Downloads" icon={<Download className="size-4" />} />
-          </div>
-
-          <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme" className="size-9">
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            className="size-9 text-muted-foreground hover:text-foreground"
+          >
             {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </Button>
 
           {user ? (
-            <>
-              {isMock && (
-                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 font-mono text-[9px] uppercase tracking-wider animate-pulse">
-                  Offline
-                </span>
-              )}
-              <Link to="/account" className="hidden sm:flex">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <UserIcon className="size-4" />
-                  <span className="hidden md:inline">{user.name.split(" ")[0]}</span>
-                </Button>
-              </Link>
-              <Button variant="ghost" size="icon" onClick={logout} aria-label="Log out" className="size-9">
+            <div className="hidden md:flex items-center gap-1.5">
+              <NavLink to="/account" className={navClass}>
+                {user.name.split(" ")[0] || "Account"}
+              </NavLink>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={logout}
+                aria-label="Sign out"
+                title="Sign out"
+                className="size-9 text-muted-foreground hover:text-foreground"
+              >
                 <LogOut className="size-4" />
               </Button>
-            </>
+            </div>
           ) : (
-            <Link to="/login">
-              <Button size="sm" className="gap-1.5 font-semibold">
-                <Sparkles className="size-3.5" />
-                Login
+            <div className="hidden md:flex items-center gap-1.5">
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/login">Sign in</Link>
               </Button>
-            </Link>
+              <Button asChild size="sm">
+                <Link to="/signup">Get started</Link>
+              </Button>
+            </div>
           )}
 
-          <Button variant="ghost" size="icon" className="lg:hidden size-9" onClick={() => setOpen((o) => !o)} aria-label="Menu">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden size-9"
+            onClick={() => setOpen((o) => !o)}
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+          >
             {open ? <X className="size-5" /> : <Menu className="size-5" />}
           </Button>
         </div>
       </div>
 
       {open && (
-        <div className="lg:hidden border-t border-border/40 bg-background/95 backdrop-blur-xl animate-fade-in">
-          <nav className="px-4 py-4 flex flex-col gap-1">
-            {navItems.map((item) => (
+        <div className="md:hidden border-b border-border bg-background">
+          <nav className="max-w-6xl mx-auto px-4 py-3 flex flex-col gap-0.5">
+            {sectionLinks.map((l) => (
               <Link
-                key={item.to}
-                to={item.to}
-                onClick={(e) => handleAnchor(e, item.to)}
-                className="px-3 py-2.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                key={l.hash}
+                to={`/#${l.hash}`}
+                onClick={(e) => scrollTo(e, l.hash)}
+                className="px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
               >
-                {item.label}
+                {l.label}
               </Link>
             ))}
             <div className="h-px bg-border my-2" />
-            <Link to="/ai" onClick={() => setOpen(false)} className="px-3 py-2.5 rounded-md text-sm font-medium hover:bg-muted flex items-center gap-2">
-              <MessageSquare className="size-4" /> AI Chat
-            </Link>
-            <Link to="/history" onClick={() => setOpen(false)} className="px-3 py-2.5 rounded-md text-sm font-medium hover:bg-muted flex items-center gap-2">
-              <History className="size-4" /> History
-            </Link>
-            <Link to="/downloads" onClick={() => setOpen(false)} className="px-3 py-2.5 rounded-md text-sm font-medium hover:bg-muted flex items-center gap-2">
-              <Download className="size-4" /> Downloads
-            </Link>
-            <Link to="/account" onClick={() => setOpen(false)} className="px-3 py-2.5 rounded-md text-sm font-medium hover:bg-muted flex items-center gap-2">
-              <UserIcon className="size-4" /> My Account
-            </Link>
+            {user ? (
+              <>
+                {[...appLinks, { label: "Account", to: "/account" }].map((l) => (
+                  <NavLink key={l.to} to={l.to} onClick={() => setOpen(false)} className={navClass}>
+                    {l.label}
+                  </NavLink>
+                ))}
+                <button
+                  onClick={() => {
+                    setOpen(false);
+                    logout();
+                  }}
+                  className="px-3 py-2 rounded-md text-sm text-left text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" onClick={() => setOpen(false)} className="px-3 py-2 rounded-md text-sm hover:bg-accent">
+                  Sign in
+                </Link>
+                <Link to="/signup" onClick={() => setOpen(false)} className="px-3 py-2 rounded-md text-sm hover:bg-accent">
+                  Create account
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       )}
     </header>
   );
 };
-
-const IconLink = ({ to, label, icon }: { to: string; label: string; icon: React.ReactNode }) => (
-  <NavLink
-    to={to}
-    title={label}
-    className={({ isActive }) =>
-      cn(
-        "size-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors",
-        isActive && "text-foreground bg-muted"
-      )
-    }
-  >
-    {icon}
-  </NavLink>
-);

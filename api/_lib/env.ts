@@ -6,8 +6,6 @@ export const env = {
   groqKey: () => process.env.GROQ_API_KEY || "",
   nvidiaKey: () => process.env.NVIDIA_API_KEY || "",
   tavilyKey: () => process.env.TAVILY_API_KEY || "",
-  upstashUrl: () => process.env.UPSTASH_REDIS_REST_URL || "",
-  upstashToken: () => process.env.UPSTASH_REDIS_REST_TOKEN || "",
   allowedOrigins: () =>
     (process.env.ALLOWED_ORIGINS || "")
       .split(",")

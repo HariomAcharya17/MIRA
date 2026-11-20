@@ -19,7 +19,6 @@ npm run dev            # http://localhost:8080 — serves the UI and /api/*
 | `GROQ_API_KEY` | server | Groq models |
 | `NVIDIA_API_KEY` | server | NVIDIA build models |
 | `TAVILY_API_KEY` | server | Web search on every message |
-| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | server, optional | Shared rate limits and search cache across instances |
 | `RATE_LIMIT_PER_MIN`, `RATE_LIMIT_PER_DAY` | server, optional | Per-IP limits (default 12/min, 200/day) |
 | `ALLOWED_ORIGINS` | server, optional | Extra origins allowed to call the API |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | client | Auth and chat sync. Public by design; data is protected by RLS. |
