@@ -196,9 +196,16 @@ transcript(): turns dropped messages into plain text for the summary call (max 1
 ======================================================================
 11. TESTING AND HONEST LIMITS
 ======================================================================
-  - The test suite (Vitest) currently has only one placeholder test. The pipeline was checked
-    by hand; real tests for parseProject, fitHistory and the search skip rules would be the
-    next step.
+  - 34 unit tests (Vitest, npm run test), all passing:
+      api/_lib/__tests__/project.test.ts   parseProject: accepts arrays, code fences, {files: [...]};
+                                           rejects "..", absolute paths, dot segments, bad characters,
+                                           duplicates, non-strings, more than 80 files, over 600,000 chars
+      api/_lib/__tests__/context.test.ts   estimateTokens (Latin vs Hindi/Gujarati), fitHistory (drops
+                                           oldest, keeps latest user message, never starts with an
+                                           assistant turn, truncates huge messages), transcript
+      api/_lib/__tests__/search.test.ts    shouldSkipSearch: skips greetings, thanks, namaste, kem cho,
+                                           "who made you"; searches real questions
+    Not yet covered: the streaming pipeline and provider calls (they need mocked network calls).
   - Rate limits and the search cache live in memory, so on Vercel they apply per server instance.
   - estimateTokens() is an estimate; a reply can still hit the model's length limit (the user is
     told and can ask Mira to continue).
