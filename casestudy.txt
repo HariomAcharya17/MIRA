@@ -1,0 +1,218 @@
+MIRA AI STUDIO - CASE STUDY NOTES
+A chat app for open AI models from Groq and NVIDIA, with web search and cited sources, four
+modes, and a project generator that builds multi-file apps you can preview and download.
+Built by Hariom Acharya.
+Live: https://mira-aichatbot.vercel.app/
+Code: https://github.com/HariomAcharya17/MIRA
+
+This file explains what the project does, how it is built, which models, settings and
+functions it uses and why, so you can explain it in an interview.
+
+
+======================================================================
+1. THE PROBLEM AND THE IDEA
+======================================================================
+Free AI chat tools are usually locked to one model, cannot look things up on the web, and break
+when a conversation gets long or a model is busy.
+
+Mira:
+  - lists the LIVE models from two free providers (Groq and NVIDIA) and lets you switch models
+    in the middle of a conversation without losing context,
+  - runs a web search before answering when it helps, and lists the sources,
+  - has four modes: General, Code, Research (deeper search with inline citations) and Writer,
+  - generates small multi-file projects, previews HTML ones safely in the browser, and downloads
+    them as a ZIP,
+  - keeps long conversations working by trimming history to each model's limit and folding older
+    turns into a running summary,
+  - retries and falls back to another model automatically when one fails.
+All of this runs on free API tiers.
+
+
+======================================================================
+2. FOLDER STRUCTURE
+======================================================================
+mira-ai-studio/
+  api/                         Vercel serverless functions (Edge runtime)
+    chat.ts                    POST /api/chat: the main pipeline, streams the reply (SSE)
+    models.ts                  GET /api/models: live model list from both providers
+    mira.ts                    old alias of /api/chat
+    _lib/
+      providers.ts             calls Groq/NVIDIA, model list, preferred models, fallbacks, retries, streaming parser
+      search.ts                Tavily web search, skip rules, 10-minute cache
+      prompts.ts               system prompts for the 4 modes, project generator and summaries
+      context.ts               token estimates, fitting history into the budget
+      project.ts               checks generated project files (paths, sizes)
+      ratelimit.ts             per-IP limits
+      kv.ts                    small in-memory store with expiry (rate limits, search cache)
+      http.ts, env.ts          CORS, origin check, safe errors, keys
+  src/
+    pages/AI.tsx               the chat screen
+    pages/                     landing, login, signup, forgot password, account, history, downloads
+    components/chat/           sidebar, composer, message view (Markdown), model picker, project panel
+    components/landing/        hero, features, chat preview, contact
+    components/ui/             shadcn/ui components (Radix)
+    contexts/AuthContext.tsx   Supabase login, or local demo login when Supabase is not set up
+    lib/mira-api.ts            reads the streamed events from /api/chat
+    lib/store.ts               chats saved in the browser (localStorage)
+    lib/chat-sync.ts           syncs chats and projects to Supabase for signed-in users
+    lib/project.ts             builds the sandboxed preview and the ZIP (JSZip)
+  supabase/migrations/         profiles, chats, messages, projects, project_files + security
+  vite.config.ts               dev server also runs the api/ functions (same as production)
+  vercel.json                  routes everything except /api to the app
+
+
+======================================================================
+3. TECHNOLOGY AND WHY
+======================================================================
+Frontend   React 18, TypeScript 5, Vite 5, Tailwind CSS 3, shadcn/ui (Radix), lucide icons,
+           react-markdown + remark-gfm + rehype-highlight (Markdown, tables, highlighted code),
+           TanStack Query, next-themes (light/dark), JSZip (download projects), Vercel Analytics
+Backend    Vercel Edge functions in TypeScript (fast start, support streaming responses)
+AI         Groq API and NVIDIA API (both OpenAI-compatible chat completions)
+Search     Tavily API
+Data       Supabase (auth + Postgres with row-level security), optional
+
+Why a server at all: the Groq, NVIDIA and Tavily keys must stay secret. The browser only talks to
+/api/chat; keys are never prefixed with VITE_ (Vite would ship them to every visitor).
+Why streaming (Server-Sent Events): the reply appears word by word instead of after a long wait.
+
+
+======================================================================
+4. WHAT HAPPENS WHEN YOU SEND A MESSAGE  (api/chat.ts)
+======================================================================
+Checks first:
+  - only POST (OPTIONS for CORS); browser requests from other websites are refused (403);
+    (the check uses the Origin header, so it stops other sites, not scripts like curl);
+  - body at most 400,000 characters; valid JSON; the last message must be from the user;
+  - the chosen provider must have a key; per-IP rate limit (default 12 per minute, 200 per day).
+
+Then run(), step by step:
+  1. Resolve the model against the LIVE list. If the chosen model was retired, switch to a
+     fallback and tell the user ("... is no longer available, so Mira switched to ...").
+  2. Token budget. tokenCeiling() finds the model's limit. Reply budget:
+       chat:    min(2048, 30% of the ceiling)
+       project: up to 8,192 tokens (on Groq, ceiling - 2,200, because the free tier counts
+                max_tokens against a per-minute cap)
+     Input budget = ceiling - reply budget - 300.
+  3. Web search on the latest message (unless turned off, or it is small talk like "hi",
+     "thanks", "namaste", "kem cho", or "who made you"). Research mode does a deeper search with
+     7 results; other modes 5. Search results get 35% of the input budget (50% in Research,
+     20% for projects). Sources are sent to the screen.
+  4. Fit the history. fitHistory() keeps the newest messages that fit. If older ones do not fit,
+     they are summarised by the same model (max 350 tokens, temperature 0.2) together with any
+     earlier summary, and the summary is sent back so the browser keeps it for next time.
+  5. Call the model with a mode-specific system prompt and stream the reply.
+     Settings per mode:
+       Writer temperature 0.8, Code 0.3, General and Research 0.6
+       reasoning effort "medium" for Research and Code, "low" otherwise
+     If the reply fails or is empty, ONE fallback model from the same provider is tried and the
+     user is told why.
+
+Events streamed to the browser: meta (provider, model, mode), notice, sources, summary, delta
+(reply text), reasoning, progress (project files so far), project (the files), usage (tokens used
+and the provider's remaining limits), error, done.
+
+
+======================================================================
+5. MODELS, FALLBACKS AND RETRIES  (api/_lib/providers.ts)
+======================================================================
+Model list: GET {provider}/models, keeping only active chat models (embedding, speech, guard and
+similar models such as whisper, tts, guard, embed, rerank are filtered out), cached for 10 minutes (30 seconds if the call failed; a stale
+good list is kept if a refresh fails).
+
+Preferred order (used for sorting and for fallbacks):
+  Groq:   openai/gpt-oss-120b, qwen/qwen3.8-27b, openai/gpt-oss-20b
+  NVIDIA: nvidia/nemotron-3.5-lightning-30b-a3b, moonshotai/kimi-k3.1-pro,
+          nvidia/nemotron-3.5-super-vl-120b-a12b
+pickFallback(): the first preferred model not tried yet, else the first non-code model, else any.
+
+complete(): up to 3 attempts. Retries server errors (500, 502, 503, 504, 520, 522, 524), network
+errors and timeouts with exponential backoff (400 ms x 3^attempt). A 429 "rate limited" is waited
+out only if the provider's Retry-After is short. Timeouts: 30 s for streaming, 90 s otherwise.
+readCompletionStream(): parses the provider's stream into text, reasoning, usage, finish reason
+and errors; gives up if no data arrives for 45 seconds.
+
+
+======================================================================
+6. WEB SEARCH  (api/_lib/search.ts)
+======================================================================
+Tavily search with search_depth "advanced" in Research mode (and include_answer "basic"), and
+"basic" depth otherwise. Results are cached for 10 minutes under a SHA-256 hash of the normalised query, so
+repeated questions do not use quota. If the key is missing or search fails, the user sees a
+notice and the model answers without it.
+
+
+======================================================================
+7. PROJECT GENERATION
+======================================================================
+Server (chat.ts runProject, project.ts parseProject):
+  - The model must return ONLY a JSON array of {path, content} (usually 3-12 files, real code,
+    no TODOs), temperature 0.2.
+  - While it streams, Mira counts "path" entries and shows progress (files and characters).
+  - parseProject() rejects: more than 80 files, more than 600,000 bytes in total, absolute paths,
+    ".." or "." segments, unsafe characters, duplicate paths, non-string content.
+  - If the JSON is invalid or cut off, Mira retries ONCE with a fix-up instruction (and "keep it
+    smaller" if it hit the length limit). On Groq it waits up to 45 s for the per-minute token
+    budget before the retry.
+Browser (src/lib/project.ts, ProjectPanel.tsx):
+  - HTML projects are combined into one page (local CSS/JS inlined) and shown in an
+    <iframe sandbox="allow-scripts">, so generated code cannot reach the main site or cookies.
+  - Generated code never runs on the server.
+  - "Download" builds a ZIP with JSZip.
+
+
+======================================================================
+8. CONTEXT AND TOKENS  (api/_lib/context.ts)
+======================================================================
+estimateTokens(): about 3.5 characters per token for Latin text and 1.5 for other scripts
+(Hindi, Gujarati...), plus a small overhead per message. Rough, but cheap and conservative.
+fitHistory(): walks back from the newest message and keeps what fits the budget.
+transcript(): turns dropped messages into plain text for the summary call (max 1,200 tokens).
+
+
+======================================================================
+9. ACCOUNTS AND STORAGE
+======================================================================
+  - With Supabase configured: email sign up / login / password reset. Chats are saved in the
+    browser AND synced to Supabase (chats, messages, projects, project_files tables).
+    Row-level security: each user can read and change only their own rows; profiles are private
+    (the old "viewable by everyone" policy was removed).
+  - Without Supabase: demo mode. Accounts and chats are stored only in the browser
+    (demo login admin@mira.io / password).
+  - Light and dark themes.
+
+
+======================================================================
+10. SECURITY DECISIONS
+======================================================================
+  - Provider and search keys only on the server; the browser never sees them.
+  - Origin check: browsers on other websites cannot call the API (only the app's own site and
+    ALLOWED_ORIGINS); the per-IP rate limit covers everything else.
+  - Per-IP rate limits; request size limit; input validation; safe error messages.
+  - Generated projects are validated on the server and run only in a sandboxed iframe.
+  - Row-level security on every Supabase table.
+
+
+======================================================================
+11. TESTING AND HONEST LIMITS
+======================================================================
+  - The test suite (Vitest) currently has only one placeholder test. The pipeline was checked
+    by hand; real tests for parseProject, fitHistory and the search skip rules would be the
+    next step.
+  - Rate limits and the search cache live in memory, so on Vercel they apply per server instance.
+  - estimateTokens() is an estimate; a reply can still hit the model's length limit (the user is
+    told and can ask Mira to continue).
+  - Free tiers have per-minute limits; Mira shows remaining limits and falls back, but very busy
+    times can still fail.
+  - Live check (21 Nov 2026): the site is up and /api/models lists models from both Groq and NVIDIA.
+
+
+======================================================================
+12. HOW TO RUN
+======================================================================
+  npm install
+  copy .env.example to .env and set GROQ_API_KEY and/or NVIDIA_API_KEY, TAVILY_API_KEY,
+    optional VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY, RATE_LIMIT_PER_MIN / PER_DAY, ALLOWED_ORIGINS
+  npm run dev     -> http://localhost:8080 (UI and /api together)
+  npm run build, npm run lint, npm run test
+  Supabase (optional): run supabase/migrations/20261120000000_chat_history.sql
